@@ -498,6 +498,7 @@ void loop() {
 
   // approximately every 3 seconds or so, random intervals, print out the
   // current stats
+  /*
   static unsigned nextInterval = 3000;
   if (millis() - timer > nextInterval) {
     timer = millis(); // reset the timer
@@ -505,6 +506,7 @@ void loop() {
     // Time in seconds keeps increasing after we get the NMEA sentence.
     // This estimate will lag real time due to transmission and parsing delays,
     // but the lag should be small and should also be consistent.
+    */
     second = GPS.seconds;
     minute = GPS.minute;
     hour = GPS.hour;

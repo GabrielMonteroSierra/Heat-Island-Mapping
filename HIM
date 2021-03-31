@@ -101,6 +101,7 @@ Adafruit_GPS GPS(&GPSSerial);
 #define GPSECHO false
 
 uint32_t timer = millis();
+char c;
 
 //////////GPS END//////////////
 //////////DISPLAY BEGIN/////////////
@@ -249,8 +250,19 @@ float Humidity = 0.0;
 float Longitude = 0.0;
 float Latitude = 0.0;
 
+String meridianStatus = "";
+String Date = "";
+String Time = "";
+int hour = 0;
+int minute = 0;
+int second = 0;
+int day = 0;
+int month = 0;
+int year = 0;
+bool fixEstablished = false;
+
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
 
   if (!ECCX08.begin()) {
     Serial.println("No ECCX08 present!");
@@ -307,32 +319,7 @@ void setup() {
   dht.begin();
   Serial.println("\nSET UP DHT END");
   ///////////////////////////////////////// SET UP DHT END ////////////////////////////////////////////////////////////////////////////////////
-  ///////////////////////////////////////// SET UP GPS BEGIN ////////////////////////////////////////////////////////////////////////////////////
- Serial.begin(115200);
-  Serial.println("Adafruit GPS library basic test!");
 
-  // 9600 NMEA is the default baud rate for Adafruit MTK GPS's- some use 4800
-  GPS.begin(9600);
-  // uncomment this line to turn on RMC (recommended minimum) and GGA (fix data) including altitude
-  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
-  // uncomment this line to turn on only the "minimum recommended" data
-  //GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCONLY);
-  // For parsing data, we don't suggest using anything but either RMC only or RMC+GGA since
-  // the parser doesn't care about other sentences at this time
-  // Set the update rate
-  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ); // 1 Hz update rate
-  // For the parsing code to work nicely and have time to sort thru the data, and
-  // print it out we don't suggest using anything higher than 1 Hz
-
-  // Request updates on antenna status, comment out to keep quiet
-  GPS.sendCommand(PGCMD_ANTENNA);
-
-  delay(1000);
-
-  // Ask for firmware version
-  GPSSerial.println(PMTK_Q_RELEASE);
-  Serial.println("\nSET UP GPS END");
-  ///////////////////////////////////////// SET UP GPS END ////////////////////////////////////////////////////////////////////////////////////
   ///////////////////////////////////////// SET UP DISPLAY BEGIN ////////////////////////////////////////////////////////////////////////////////////
 
   Serial.println("Display Begin");
@@ -418,44 +405,48 @@ void setup() {
 
   Serial.println("\nSET UP WIFI END");
   ///////////////////////////////////////// SET UP WIFI END ////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////// SET UP GPS BEGIN ////////////////////////////////////////////////////////////////////////////////////
+  Serial.println("Adafruit GPS library basic test!");
+
+  // 9600 NMEA is the default baud rate for Adafruit MTK GPS's- some use 4800
+  GPS.begin(9600);
+  // uncomment this line to turn on RMC (recommended minimum) and GGA (fix data) including altitude
+  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
+  // uncomment this line to turn on only the "minimum recommended" data
+  //GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCONLY);
+  // For parsing data, we don't suggest using anything but either RMC only or RMC+GGA since
+  // the parser doesn't care about other sentences at this time
+  // Set the update rate
+  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ); // 1 Hz update rate
+  // For the parsing code to work nicely and have time to sort thru the data, and
+  // print it out we don't suggest using anything higher than 1 Hz
+
+  // Request updates on antenna status, comment out to keep quiet
+  GPS.sendCommand(PGCMD_ANTENNA);
+
+  delay(1000);
+
+  // Ask for firmware version
+  GPSSerial.println(PMTK_Q_RELEASE);
+  Serial.println("\nSET UP GPS END");
+  ///////////////////////////////////////// SET UP GPS END ////////////////////////////////////////////////////////////////////////////////////
 
 } //End of Setup  ****************************************************************************************************
 
 void loop() {
-  ///////////////////////////////////////// LOOP DHT BEGIN ////////////////////////////////////////////////////////////////////////////////////
-  Serial.println("\nLOOP DHT BEGIN");
-  // Wait a few seconds between measurements.
-  delay(3000);
-
-  // Reading temperature or humidity takes about 250 milliseconds!
-  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-  Humidity = dht.readHumidity();
-  // Read temperature as Fahrenheit (isFahrenheit = true)
-  Temperature = dht.readTemperature(true);
-
-  // Check if any reads failed and exit early (to try again).
-  if (isnan(Humidity) || isnan(Temperature)) {
-    Serial.println(F("Failed to read from DHT sensor!"));
-    return;
-  }
-
-
-  Serial.print(F("Humidity: "));
-  Serial.print(Humidity);
-  Serial.print(F("%  Temperature: "));
-  Serial.print(Temperature);
-  Serial.print(F("°F "));
-
-  Serial.println("\nLOOP DHT END");
-  ///////////////////////////////////////// LOOP DHT END ////////////////////////////////////////////////////////////////////////////////////
-  ///////////////////////////////////////// LOOP GPS BEGIN ////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////// LOOP GPS BEGIN ////////////////////////////////////////////////////////////////////////////////////
   // read data from the GPS in the 'main loop'
-  char c = GPS.read();
+  Serial.println("\nLOOP GPS BEGIN");
+  c = GPS.read();
+  Serial.println("after GPS.read");
   // if you want to debug, this is a good time to do it!
   if (GPSECHO)
     if (c) Serial.print(c);
+
+  Serial.println("after GPSECHO");
   // if a sentence is received, we can check the checksum, parse it...
   if (GPS.newNMEAreceived()) {
+    
     // a tricky thing here is if we print the NMEA sentence, or data
     // we end up not listening and catching other sentences!
     // so be very wary if using OUTPUT_ALLDATA and trying to print out data
@@ -463,6 +454,7 @@ void loop() {
     if (!GPS.parse(GPS.lastNMEA())) // this also sets the newNMEAreceived() flag to false
       return; // we can fail to parse a sentence in which case we should just wait for another
   }
+  Serial.println("after GPS.newNMEAreceived");
 
   // approximately every 2 seconds or so, print out the current stats
   if (millis() - timer > 2000) {
@@ -499,6 +491,34 @@ void loop() {
   }
   Serial.println("\nLOOP GPS END");
   ///////////////////////////////////////// LOOP GPS END ////////////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////// LOOP DHT BEGIN ////////////////////////////////////////////////////////////////////////////////////
+  Serial.begin(9600);
+  Serial.println("\nLOOP DHT BEGIN");
+  // Wait a few seconds between measurements.
+  delay(3000);
+
+  // Reading temperature or humidity takes about 250 milliseconds!
+  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+  Humidity = dht.readHumidity();
+  // Read temperature as Fahrenheit (isFahrenheit = true)
+  Temperature = dht.readTemperature(true);
+
+  // Check if any reads failed and exit early (to try again).
+  if (isnan(Humidity) || isnan(Temperature)) {
+    Serial.println(F("Failed to read from DHT sensor!"));
+    return;
+  }
+
+
+  Serial.print(F("Humidity: "));
+  Serial.print(Humidity);
+  Serial.print(F("%  Temperature: "));
+  Serial.print(Temperature);
+  Serial.print(F("°F "));
+  Serial.begin(115200);
+  Serial.println("\nLOOP DHT END");
+  ///////////////////////////////////////// LOOP DHT END ////////////////////////////////////////////////////////////////////////////////////
+
 
 
 
@@ -726,10 +746,6 @@ void loop() {
   // open the file. note that only one file can be open at a time,
   // so you have to close this one before opening another.
   File dataFile = SD.open("datalog.csv", FILE_WRITE);
-  Serial.println("success");
-  Serial.println("success");
-  Serial.println("success");
-  Serial.println("success");
 
   // if the file is available, write to it:
   if (dataFile) {
@@ -925,29 +941,6 @@ void loop() {
 } //End of Loop ****************************************************************************************************
 
 ///////////////////////////////////////// GPS BEGIN ////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef NMEA_EXTENSIONS
-void updateBoat() { // fill up the boat values with some test data to use in
-  // build()
-  double t = millis() / 1000.;
-  double theta = t / 100.;   // slow
-  double gamma = theta * 10; // faster
-  Boat.latitude = 4400 + sin(theta) * 60;
-  Boat.lat = 'N';
-  Boat.longitude = 7600 + cos(theta) * 60;
-  Boat.lon = 'W';
-  Boat.fixquality = 2;
-  Boat.speed = 3 + sin(gamma);
-  Boat.hour = abs(cos(theta)) * 24;
-  Boat.minute = 30 + sin(theta / 2) * 30;
-  Boat.seconds = 30 + sin(gamma) * 30;
-  Boat.milliseconds = 500 + sin(gamma) * 500;
-  Boat.year = 1 + abs(sin(theta)) * 25;
-  Boat.month = 1 + abs(sin(gamma)) * 11;
-  Boat.day = 1 + abs(sin(gamma)) * 26;
-  Boat.satellites = abs(cos(gamma)) * 10;
-}
-#endif
 
 ///////////////////////////////////////// GPS END ////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////// WIFI BEGIN ////////////////////////////////////////////////////////////////////////////////////

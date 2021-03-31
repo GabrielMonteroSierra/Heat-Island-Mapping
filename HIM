@@ -551,7 +551,7 @@ void loop() {
       Serial.println(GPS.lon);
       Serial.print("Satellites: ");
       Serial.println((int)GPS.satellites);
-    }
+    }/*
 #ifdef NMEA_EXTENSIONS
     char latestBoat[200] = "";
     updateBoat();                              // create some test data in Boat
@@ -561,7 +561,7 @@ void loop() {
     GPS.resetSentTime();   // make timing look like it came in on GPS
     GPS.parse(latestBoat); // parse the test data and store in GPS
 #endif
-  }
+  }*/
   Serial.println("\nLOOP GPS END");
   ///////////////////////////////////////// LOOP GPS END ////////////////////////////////////////////////////////////////////////////////////
 
@@ -990,7 +990,7 @@ void loop() {
 } //End of Loop ****************************************************************************************************
 
 ///////////////////////////////////////// GPS BEGIN ////////////////////////////////////////////////////////////////////////////////////
-
+/*
 #ifdef NMEA_EXTENSIONS
 void updateBoat() { // fill up the boat values with some test data to use in
   // build()
@@ -1012,7 +1012,7 @@ void updateBoat() { // fill up the boat values with some test data to use in
   Boat.day = 1 + abs(sin(gamma)) * 26;
   Boat.satellites = abs(cos(gamma)) * 10;
 }
-#endif
+#endif*/
 
 ///////////////////////////////////////// GPS END ////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////// WIFI BEGIN ////////////////////////////////////////////////////////////////////////////////////

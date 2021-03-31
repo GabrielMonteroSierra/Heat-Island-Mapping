@@ -111,6 +111,7 @@ int second = 0;
 int day = 0;
 int month = 0;
 int year = 0;
+bool fixEstablished = false;
 
 //////////GPS END//////////////
 //////////DISPLAY BEGIN/////////////
@@ -243,14 +244,6 @@ class Queue {
       }
     }
 };
-
-//offlineBuffer *head = NULL;
-//offlineBuffer *tail = NULL;
-//struct offlineBuffer *temp = NULL;
-
-//ArduinoQueue<offlineBuffer> myQueue();
-
-
 
 //////////WIFI END//////////////
 
@@ -488,7 +481,7 @@ void loop() {
   // approximately every 2 seconds or so, print out the current stats
   if (millis() - timer > 2000) {
     timer = millis(); // reset the timer
-    
+
     second = GPS.seconds;
     minute = GPS.minute;
     hour = GPS.hour;
@@ -520,21 +513,23 @@ void loop() {
     Serial.print(" quality: "); Serial.println((int)GPS.fixquality);
     if (GPS.fix) {
       Serial.print("Location: ");
-      Serial.print(GPS.latitude, 4); Serial.print(GPS.lat);
+      Serial.print(GPS.latitude, 7); Serial.print(GPS.lat);
       Serial.print(", ");
-      Serial.print(GPS.longitude, 4); Serial.println(GPS.lon);
+      Serial.print(GPS.longitude, 7); Serial.println(GPS.lon);
       Serial.print("Speed (knots): "); Serial.println(GPS.speed);
       Serial.print("Angle: "); Serial.println(GPS.angle);
       Serial.print("Altitude: "); Serial.println(GPS.altitude);
       Serial.print("Satellites: "); Serial.println((int)GPS.satellites);
+      fixEstablished = true;
+    }
+    else {
+      fixEstablished = false;
+      Serial.println("no fix");
     }
   }
 
   Serial.println("\nLOOP GPS END");
   ///////////////////////////////////////// LOOP GPS END ////////////////////////////////////////////////////////////////////////////////////
-
-
-
   ///////////////////////////////////////// LOOP DISPLAY BEGIN ////////////////////////////////////////////////////////////////////////////////////
 
   pinMode(TFT_CS, OUTPUT);

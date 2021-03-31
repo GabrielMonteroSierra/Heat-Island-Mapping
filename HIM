@@ -1,0 +1,1110 @@
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*
+  Heat Island Mapping Combined Code
+
+*/
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*
+  SD card read/write
+
+   SD card attached to SPI bus as follows:
+ ** MOSI - pin 10
+ ** MISO - pin 8
+ ** CLK - pin 9
+ ** CS - pin A1 (for MKRZero SD: SDCARD_SS_PIN)
+*/
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*
+  DHT
+
+  Yellow(data) - Pin 2
+  Red 3.3V - VCC
+  Black - GND
+  10k resisitor that connects power(red) to data(yellow) and is grounded
+
+
+  REQUIRES the following Arduino libraries:
+  - DHT Sensor Library: https://github.com/adafruit/DHT-sensor-library
+  - Adafruit Unified Sensor Lib: https://github.com/adafruit/Adafruit_Sensor
+*/
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*
+  GPS
+
+  Power 3.3V - VCC
+  GND
+  GPS TX to arduino RX
+  GPS RX to arduino TX
+
+*/
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*
+  Display
+
+  Vin 5V
+  GND
+  CLK
+  MISO - Pin 10
+  MOSI - Pin 8
+  CS - 7
+  D/C - Pin 6
+  x+ Pin 5
+  x- Pin A3
+  Y+ Pin A2
+  Y- Pin 4
+
+*/
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//////////SD BEGIN////////////
+
+#include <SPI.h>
+#include <SD.h>
+
+#define chipSelect A1
+
+//////////SD END/////////////
+//////////DHT BEGIN////////////
+
+#include <DHT.h>
+
+#define DHTPIN 2     // Digital pin connected to the DHT sensor
+
+#define DHTTYPE DHT22   // DHT 22  (AM2302), AM2321
+
+// Connect pin 1 (on the left) of the sensor to +5V
+// NOTE: If using a board with 3.3V logic like an Arduino Due connect pin 1
+// to 3.3V instead of 5V!
+// Connect pin 2 of the sensor to whatever your DHTPIN is
+// Connect pin 4 (on the right) of the sensor to GROUND
+// Connect a 10K resistor from pin 2 (data) to pin 1 (power) of the sensor
+
+// Initialize DHT sensor.
+// Note that older versions of this library took an optional third parameter to
+// tweak the timings for faster processors.  This parameter is no longer needed
+// as the current DHT reading algorithm adjusts itself to work on faster procs.
+DHT dht(DHTPIN, DHTTYPE);
+
+//////////DHT END/////////////
+//////////GPS BEGIN/////////////
+
+#include <Adafruit_GPS.h>
+
+#define GPSSerial Serial1
+
+// Connect to the GPS on the hardware port
+Adafruit_GPS GPS(&GPSSerial);
+
+#ifdef NMEA_EXTENSIONS
+// Create another GPS object to hold the state of the boat, with no
+// communications, so you don't need to call Boat.begin() in setup.
+// We will build some fake sentences from the Boat data to feed to
+// GPS for testing.
+Adafruit_GPS Boat;
+#endif
+
+// Set GPSECHO to 'false' to turn off echoing the GPS data to the Serial console
+// Set to 'true' if you want to debug and listen to the raw GPS sentences
+#define GPSECHO false
+
+uint32_t timer = millis();
+
+int minute;
+int day;
+float second;
+int hour;
+int month;
+int year;
+
+String Date;
+String Time;
+String meridianStatus;
+
+//////////GPS END//////////////
+//////////DISPLAY BEGIN/////////////
+
+//headers for the display graphics
+#include "SPI.h"
+#include "Adafruit_GFX.h"
+#include "Adafruit_ILI9341.h"
+
+//headers for the touchscreen
+#include <stdint.h>
+#include "TouchScreen.h"
+
+#define BLACK    0x0000
+#define BLUE     0x001F
+#define RED      0xF800
+#define GREEN    0x07E0
+#define CYAN     0x07FF
+#define MAGENTA  0xF81F
+#define YELLOW   0xFFE0
+#define WHITE    0xFFFF
+
+//pins for the MKR Wifi 1010
+#define TFT_DC 6
+#define TFT_CS 7
+#define TFT_MOSI 8
+#define TFT_CLK 9
+#define TFT_MISO 10
+
+//pins for the touchscreen
+#define YP A2  // must be an analog pin, use "An" notation!
+#define XM A3  // must be an analog pin, use "An" notation!
+#define YM 4   // can be a digital pin
+#define XP 5   // can be a digital pin
+
+Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_MOSI, TFT_CLK, A0, TFT_MISO);
+
+// For better pressure precision, we need to know the resistance
+// between X+ and X- Use any multimeter to read it
+// For the one we're using, its 300 ohms across the X plate (?)
+TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
+
+//size of menu boxes
+#define BOXSIZE 50
+
+//int to keep track of where menu is at
+//0 = starting menu, 1 = mapping, 2 = cloud
+int menuSelect = 0;
+int mo;
+
+//////////DISPLAY END/////////////
+//////////WIFI BEGIN/////////////
+
+#include <WiFiNINA.h>
+#include <ArduinoECCX08.h>
+
+const char WEBSITE[] = "api.pushingbox.com";  //pushingbox API server
+const String devid = "vFD86960FD30E512";  //device ID on Pushingbox for our Scenario
+
+const char* MY_SSID = "Hotspot";
+const char* MY_PWD =  "12345678";
+
+int status = WL_IDLE_STATUS;
+
+bool Connected = false;
+
+struct offlineBuffer {
+  String dateBuffer;
+  String timeBuffer;
+  String temperatureBuffer;
+  String humidityBuffer;
+  String longitudeBuffer;
+  String latitudeBuffer;
+
+  offlineBuffer *next;
+};
+
+class Queue {
+  offlineBuffer *head;
+  offlineBuffer *tail;
+
+  public:
+    Queue() {
+      head = tail = NULL;
+    }
+    void addReading(String dateIn, String timeIn, String tempIn, String humIn, String longIn, String latIn) {
+      offlineBuffer *temp;
+      temp = new offlineBuffer;
+      temp->dateBuffer = dateIn;
+      temp->timeBuffer = timeIn;
+      temp->temperatureBuffer = tempIn;
+      temp->humidityBuffer = humIn;
+      temp->longitudeBuffer = longIn;
+      temp->latitudeBuffer = latIn;
+
+      temp->next = NULL;
+
+      if(head == NULL) {
+        head = tail = temp;
+      }
+      else {
+        tail->next = temp;
+        tail = temp;
+      }
+    }
+    void uploadReading() {
+      offlineBuffer *temp;
+      
+      while(head != NULL) {
+        temp = head;
+        head = head->next;
+        delete temp;
+      }
+    }
+    void displayQueue() {
+      offlineBuffer *temp;
+      temp = head;
+
+      while(temp != NULL) {
+        Serial.println();
+        Serial.println("dateBuffer: " + temp->dateBuffer);
+        Serial.println("timeBuffer: " + temp->timeBuffer);
+        Serial.println("temperatureBuffer: " + temp->temperatureBuffer);
+        Serial.println("humidityBuffer: " + temp->humidityBuffer);
+        Serial.println("longitudeBuffer: " + temp->longitudeBuffer);
+        Serial.println("latitudeBuffer: " + temp->latitudeBuffer);
+        Serial.println();
+        temp = temp->next;
+        delay(100);
+      }
+    }
+};
+
+//offlineBuffer *head = NULL;
+//offlineBuffer *tail = NULL;
+//struct offlineBuffer *temp = NULL;
+
+//ArduinoQueue<offlineBuffer> myQueue();
+
+
+
+//////////WIFI END//////////////
+
+float Temperature = 0.0;
+float Humidity = 0.0;
+float Longitude = 0.0;
+float Latitude = 0.0;
+
+void setup() {
+  Serial.begin(115200);
+
+  if (!ECCX08.begin()) {
+    Serial.println("No ECCX08 present!");
+    while (1);
+  }
+
+  SPI.begin();
+
+  ///////////////////////////////////////// SET UP SD BEGIN ////////////////////////////////////////////////////////////////////////////////////
+  Serial.println("\nSET UP SD BEGIN");
+  Serial.print("Initializing SD card...");
+
+  pinMode(chipSelect, OUTPUT);
+  digitalWrite(chipSelect, LOW);///////////////////////////////////needs testing///////////////////////
+
+  // see if the card is present and can be initialized:
+  if (!SD.begin(chipSelect)) {
+    Serial.println("Card failed, or not present");
+    while (1);
+  }
+  Serial.println("card initialized.");
+
+  File dataFile;
+  String labels = "";
+  if (SD.exists("datalog.csv")) {
+    dataFile = SD.open("datalog.csv", FILE_WRITE);
+    dataFile.close();
+  } else {
+    Serial.println("Creating file...");
+    dataFile = SD.open("datalog.csv", FILE_WRITE);
+
+    labels += "Date";
+    labels += ",";
+    labels += "Time";
+    labels += ",";
+    labels += "Temperature";
+    labels += ",";
+    labels += "Humidity";
+    labels += ",";
+    labels += "Longitude";
+    labels += ",";
+    labels += "Latitude";
+
+    dataFile.println(labels);
+    dataFile.close();
+  }
+  digitalWrite(chipSelect, HIGH);
+  Serial.println("\nSET UP SD END");
+  ///////////////////////////////////////// SET UP SD END ////////////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////// SET UP DHT BEGIN ////////////////////////////////////////////////////////////////////////////////////
+  Serial.println("\nSET UP DHT BEGIN");
+  Serial.println(F("DHT Begin"));
+
+  dht.begin();
+  Serial.println("\nSET UP DHT END");
+  ///////////////////////////////////////// SET UP DHT END ////////////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////// SET UP GPS BEGIN ////////////////////////////////////////////////////////////////////////////////////
+  Serial.println("\nSET UP GPS BEGIN");
+  Serial.println("GPS Begin");
+
+  // 9600 NMEA is the default baud rate for Adafruit MTK GPS's- some use 4800
+  GPS.begin(115200);
+  // uncomment this line to turn on RMC (recommended minimum) and GGA (fix data)
+  // including altitude
+  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
+  // uncomment this line to turn on only the "minimum recommended" data
+  // GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCONLY);
+  // For parsing data, we don't suggest using anything but either RMC only or
+  // RMC+GGA since the parser doesn't care about other sentences at this time
+  // Set the update rate (uncomment the one you want.)
+  // GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ); // 1 Hz update rate
+  // GPS.sendCommand(PMTK_SET_NMEA_UPDATE_200_MILLIHERTZ); // 5 second update
+  // time
+  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_100_MILLIHERTZ); // 10 second update time
+  // For the parsing code to work nicely and have time to sort thru the data,
+  // and print it out we don't suggest using anything higher than 1 Hz
+
+  // Request updates on antenna status, comment out to keep quiet
+  GPS.sendCommand(PGCMD_ANTENNA);
+
+  delay(3000);
+
+  // Ask for firmware version
+  GPSSerial.println(PMTK_Q_RELEASE);
+  Serial.println("\nSET UP GPS END");
+  ///////////////////////////////////////// SET UP GPS END ////////////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////// SET UP DISPLAY BEGIN ////////////////////////////////////////////////////////////////////////////////////
+
+  Serial.println("Display Begin");
+
+  pinMode(TFT_CS, OUTPUT);
+  digitalWrite(TFT_CS, HIGH); ////////////////////////////////////needs testing//////////
+
+
+  tft.begin();
+
+  tft.fillScreen(BLUE);
+  tft.setTextWrap(false);
+
+  tft.setCursor(0, 0); //set cursor at x = 0, y = 0
+  tft.setTextColor(BLACK);
+  tft.setTextSize(2);
+  tft.println("Hello Sr Design!");
+
+  delay(1000);
+
+  tft.setCursor(0, 0);
+  tft.fillScreen(BLUE);
+  tft.setTextWrap(false);
+
+  //Prints out space for temp, humidity and power
+  tft.setCursor(0, 0);
+  tft.setTextColor(WHITE);
+  tft.setTextSize(2);
+  tft.print("\n\nTemp: ");
+  tft.print(" F\n\n");
+  tft.print("Humidity: ");
+  tft.print(" %\n\n");
+  tft.print("Power: ");
+  //insert power code here
+  tft.print("%");
+
+  //drawing menu options
+  tft.fillRect(10, 140, BOXSIZE * 2, BOXSIZE, CYAN); //draws rectangle (x,y,width,height,color)
+  tft.setCursor(20, 150);
+  tft.setTextColor(WHITE, CYAN);
+  tft.setTextSize(2);
+  tft.println("Mapping");
+
+  tft.fillRect(10, 200, BOXSIZE * 2, BOXSIZE, CYAN); //draws rectangle (x,y,width,height,color)
+  tft.setCursor(20, 210);
+  tft.setTextColor(WHITE, CYAN);
+  tft.setTextSize(2);
+  tft.println("Cloud");
+  tft.setCursor(20, 227);
+  tft.setTextColor(WHITE, CYAN);
+  tft.setTextSize(2);
+  tft.println("Storage");
+
+  digitalWrite(TFT_CS, LOW);
+
+  ///////////////////////////////////////// SET UP DISPLAY END ////////////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////// SET UP WIFI BEGIN ////////////////////////////////////////////////////////////////////////////////////
+  Serial.println("\nSET UP WIFI BEGIN");
+  Serial.print("Attempting to connect to SSID: ");
+  Serial.println(MY_SSID);
+
+  status = WiFi.status();
+
+  if (status != WL_CONNECTED) {
+    WiFi.begin(MY_SSID, MY_PWD);
+
+    delay(5000);
+  }
+
+  status = WiFi.status();
+
+  if (status == WL_CONNECTED) {
+    Serial.println();
+    Serial.println("Connected to wifi");
+    printWifiStatus();
+
+    Connected = true;
+  }
+  else {
+    Serial.println();
+    Serial.println("Unable to connect to wifi");
+  }
+
+  Serial.println("\nSET UP WIFI END");
+  ///////////////////////////////////////// SET UP WIFI END ////////////////////////////////////////////////////////////////////////////////////
+
+} //End of Setup  ****************************************************************************************************
+
+void loop() {
+  ///////////////////////////////////////// LOOP DHT BEGIN ////////////////////////////////////////////////////////////////////////////////////
+  Serial.println("\nLOOP DHT BEGIN");
+  // Wait a few seconds between measurements.
+  delay(3000);
+
+  // Reading temperature or humidity takes about 250 milliseconds!
+  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+  Humidity = dht.readHumidity();
+  // Read temperature as Fahrenheit (isFahrenheit = true)
+  Temperature = dht.readTemperature(true);
+
+  // Check if any reads failed and exit early (to try again).
+  if (isnan(Humidity) || isnan(Temperature)) {
+    Serial.println(F("Failed to read from DHT sensor!"));
+    return;
+  }
+
+
+  Serial.print(F("Humidity: "));
+  Serial.print(Humidity);
+  Serial.print(F("%  Temperature: "));
+  Serial.print(Temperature);
+  Serial.print(F("°F "));
+
+  Serial.println("\nLOOP DHT END");
+  ///////////////////////////////////////// LOOP DHT END ////////////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////// LOOP GPS BEGIN ////////////////////////////////////////////////////////////////////////////////////
+  Serial.println("\nLOOP GPS BEGIN");
+
+  meridianStatus = "";
+  Date = "";
+  Time = "";
+
+  // read data from the GPS in the 'main loop'
+  char c = GPS.read();
+  // if you want to debug, this is a good time to do it!
+  if (GPSECHO)
+    if (c)
+      Serial.print(c);
+  // if a sentence is received, we can check the checksum, parse it...
+  if (GPS.newNMEAreceived()) {
+    // a tricky thing here is if we print the NMEA sentence, or data
+    // we end up not listening and catching other sentences!
+    // so be very wary if using OUTPUT_ALLDATA and trytng to print out data
+    // Serial.println(GPS.lastNMEA()); // this also sets the newNMEAreceived()
+    // flag to false
+    if (!GPS.parse(GPS.lastNMEA())) // this also sets the newNMEAreceived() flag
+      // to false
+      return; // we can fail to parse a sentence in which case we should just
+    // wait for another
+  }
+
+  // approximately every 3 seconds or so, random intervals, print out the
+  // current stats
+  static unsigned nextInterval = 3000;
+  if (millis() - timer > nextInterval) {
+    timer = millis(); // reset the timer
+    nextInterval = 1500 + random(1000);
+    // Time in seconds keeps increasing after we get the NMEA sentence.
+    // This estimate will lag real time due to transmission and parsing delays,
+    // but the lag should be small and should also be consistent.
+    second = GPS.seconds;
+    minute = GPS.minute;
+    hour = GPS.hour;
+    day = GPS.day;
+    year = GPS.year + 2000;
+    month = GPS.month;
+    // Adjust time and day forward to account for elapsed time.
+    // This will break at month boundaries!!! Humans will have to cope with
+    // April 31,32 etc.
+
+    if (hour > 12) {
+      hour -= 12;
+      meridianStatus = "PM";
+    } else {
+      meridianStatus = "AM";
+    }
+
+    Time = String(hour) + ":" + String(minute) + ":" + String(second) + " " + String(meridianStatus);
+    Date = String(month) + "-" + String(day) + "-" + String(year);
+
+    // ISO Standard Date Format, with leading zeros https://xkcd.com/1179/
+    Serial.print("\nDate: " + Date);
+
+    Serial.print("   Time: " + Time);
+
+    Serial.print("Fix: ");
+    Serial.print((int)GPS.fix);
+    Serial.print(" quality: ");
+    Serial.println((int)GPS.fixquality);
+    Serial.print("Time [s] since last fix: ");
+    Serial.println(GPS.secondsSinceFix(), 3);
+    Serial.print("    since last GPS time: ");
+    Serial.println(GPS.secondsSinceTime(), 3);
+    Serial.print("    since last GPS date: ");
+    Serial.println(GPS.secondsSinceDate(), 3);
+    if (GPS.fix) {
+      Serial.print("Location: ");
+      Serial.print(GPS.latitude, 7);
+      Serial.print(GPS.lat);
+      Serial.print(", ");
+      Serial.print(GPS.longitude, 7);
+      Serial.println(GPS.lon);
+      Serial.print("Satellites: ");
+      Serial.println((int)GPS.satellites);
+    }
+#ifdef NMEA_EXTENSIONS
+    char latestBoat[200] = "";
+    updateBoat();                              // create some test data in Boat
+    Boat.build(latestBoat, "GN", "RMC");       // make a sentence from Boat data
+    Serial.print("\nbuild() test output -->"); //
+    Serial.print(latestBoat);                  //
+    GPS.resetSentTime();   // make timing look like it came in on GPS
+    GPS.parse(latestBoat); // parse the test data and store in GPS
+#endif
+  }
+  Serial.println("\nLOOP GPS END");
+  ///////////////////////////////////////// LOOP GPS END ////////////////////////////////////////////////////////////////////////////////////
+
+
+
+  ///////////////////////////////////////// LOOP DISPLAY BEGIN ////////////////////////////////////////////////////////////////////////////////////
+
+  pinMode(TFT_CS, OUTPUT);
+  SPI.setDataMode(SPI_MODE3);
+  
+  digitalWrite(TFT_CS, HIGH); /////////////////////needs testing///////////////////
+  
+  Serial.println("\nLOOP DISPLAY BEGIN");
+  TSPoint p = ts.getPoint();
+  
+  if (menuSelect == 0)
+  {
+    tft.fillRect(70, 15, BOXSIZE * 3, 30, BLUE);
+    tft.fillRect(100, 57, BOXSIZE * 2, 30, BLUE);
+    if (mo != minute) {
+      tft.fillRect(55, 0, BOXSIZE * 2, 25, BLUE);
+      mo = minute;
+    }
+
+    //T:
+    //H:
+    tft.setCursor(85, 0);
+    tft.setTextColor(WHITE);
+    tft.setTextSize(2);
+    tft.print(hour); tft.print(":"); tft.print(minute);
+    tft.print("\n\nTemp: ");
+    tft.print(Temperature); tft.print(" "); //tft.print((char)248);
+    tft.print("F\n\n");
+    tft.print("Humidity: ");
+    tft.print(Humidity);
+    tft.print(" %\n\n");
+    tft.print("Power: ");
+    //insert power code here
+    tft.print("%\n");
+    tft.print(GPS.latitude); tft.print(", "); tft.print(GPS.longitude); //prints location
+
+   /* tft.setCursor(30, 260);
+      tft.setTextColor(WHITE, RED);
+      tft.setTextSize(2);
+      tft.println("ERROR: WIFI NOT");
+      tft.setCursor(50, 280);
+      tft.setTextColor(WHITE, RED);
+      tft.setTextSize(2);
+      tft.println("CONNECTED");
+    
+     // see if the card is present and can be initialized: /////////////////////needs testing////////////
+    if (!SD.begin(chipSelect)) {
+    
+      tft.setTextColor(WHITE, RED);
+      tft.setTextSize(2);
+      tft.println("ERROR: SD CARD");
+      tft.setCursor(50, 280);
+      tft.setTextColor(WHITE, RED);
+      tft.setTextSize(2);
+      tft.println("NOT INSERTED");
+      while (1);
+    }*/
+  if (status != WL_CONNECTED && Connected || status == WL_CONNECT_FAILED) {
+      tft.setCursor(30, 260);
+      tft.setTextColor(WHITE, RED);
+      tft.setTextSize(2);
+      tft.println("ERROR: WIFI NOT");
+      tft.setCursor(50, 280);
+      tft.setTextColor(WHITE, RED);
+      tft.setTextSize(2);
+      tft.println("CONNECTED");
+    Connected = false;
+    WiFi.begin(MY_SSID, MY_PWD);
+  }
+  else if (status == WL_CONNECTED && !Connected) {
+    Serial.println();
+    Serial.println("Connected to wifi");
+    tft.fillRect(30, 260, BOXSIZE * 4, 100, BLUE); ////////need to test/////////////
+    
+    printWifiStatus();
+
+    Connected = true;
+  }
+  
+  }
+
+  // we have some minimum pressure we consider 'valid'
+  // pressure of 0 means no pressing!
+  //logic for pushing Mapping button
+  if (p.z > ts.pressureThreshhold && p.x < 550 && p.x > 370 && p.y < 600 && p.y > 500 && menuSelect == 0) {
+
+    menuSelect = 1; //shows we are in one of the URL menus
+
+    tft.setCursor(0, 0);
+    tft.fillScreen(BLUE);
+    tft.setTextWrap(false);
+
+    tft.setCursor(0, 0); //need to move to middle of screen after measuring
+    tft.setTextColor(WHITE);
+    tft.setTextSize(2);
+    tft.println("To access the Map\n");
+    tft.println("Use this URL code \nin your web browser: \n");
+    tft.println("[insert URL]"); //need the URL
+
+    //back button
+    tft.fillRect(110, 120, BOXSIZE * 2, BOXSIZE, CYAN);
+    tft.setCursor(130, 135); //should be lower right
+    tft.setTextColor(WHITE, CYAN);
+    tft.println("Back");
+  }
+
+
+  //logic for Cloud Storage
+  if (p.z > ts.pressureThreshhold && p.x < 550 && p.x > 370 && p.y < 700 && p.y > 600 && menuSelect == 0) {
+
+    menuSelect = 1;
+
+    tft.setCursor(0, 0);
+    tft.fillScreen(BLUE);
+    tft.setTextWrap(false);
+
+    tft.setCursor(0, 0); //need to move to middle of screen after measuring
+    tft.setTextColor(WHITE);
+    tft.setTextSize(2);
+    tft.println("To access the\n Cloud Storage\n");
+    tft.println("Use this URL code \nin your web browser: \n");
+    tft.println("[insert URL]"); //need the URL
+
+    //back button
+    tft.fillRect(110, 120, BOXSIZE * 2, BOXSIZE, CYAN);
+    tft.setCursor(130, 135); //should be lower right
+    tft.setTextColor(WHITE, CYAN);
+    tft.println("Back");
+  }
+
+  //logic for pushing the back button
+  if (p.z > ts.pressureThreshhold && p.x < 720 && p.x > 580 && p.y < 580 && p.y > 480 && menuSelect == 1)
+  {
+
+    menuSelect = 0;
+    tft.setCursor(0, 0);
+    tft.fillScreen(BLUE);
+    tft.setTextWrap(false);
+
+    //T:
+    //H:
+    tft.setCursor(85, 0);
+    tft.setTextColor(WHITE);
+    tft.setTextSize(2);
+    tft.print(hour); tft.print(":"); tft.print(minute);
+    tft.print("\n\nTemp: ");
+    tft.print(Temperature); tft.print(" "); //tft.print((char)248);
+    tft.print("F\n\n");
+    tft.print("Humidity: ");
+    tft.print(Humidity);
+    tft.print(" %\n\n");
+    tft.print("Power: ");
+    //insert power code here
+    tft.print("%\n\n");
+    tft.print(GPS.latitude); tft.print(", "); tft.print(GPS.longitude); //prints location
+
+    //drawing menu options
+    tft.fillRect(10, 140, BOXSIZE * 2, BOXSIZE, CYAN); //draws rectangle (x,y,width,height,color)
+    tft.setCursor(20, 150);
+    tft.setTextColor(WHITE, CYAN);
+    tft.setTextSize(2);
+    tft.println("Mapping");
+
+    tft.fillRect(10, 200, BOXSIZE * 2, BOXSIZE, CYAN); //draws rectangle (x,y,width,height,color)
+    tft.setCursor(20, 210);
+    tft.setTextColor(WHITE, CYAN);
+    tft.setTextSize(2);
+    tft.println("Cloud");
+    tft.setCursor(20, 227);
+    tft.setTextColor(WHITE, CYAN);
+    tft.setTextSize(2);
+    tft.println("Storage");
+  }
+
+  Serial.println("\nLOOP DISPLAY END");
+  digitalWrite(TFT_CS, LOW); /////////////////////needs testing///////////////////
+
+  ///////////////////////////////////////// LOOP DISPLAY END ////////////////////////////////////////////////////////////////////////////////////
+
+    ///////////////////////////////////////// LOOP SD BEGIN ////////////////////////////////////////////////////////////////////////////////////
+  Serial.println("\nLOOP SD BEGIN");
+
+  pinMode(chipSelect, OUTPUT);
+  SPI.setDataMode(SPI_MODE0); 
+ 
+  digitalWrite(chipSelect, LOW); //////////////////////////needs testing////////////////
+
+  // make a string for assembling the data to log:
+  String dataString = "";
+  float coordInt = 0.0;
+  float coordDec = 0.0;
+
+  dataString += String(Date);
+  dataString += ",";
+  dataString += String(Time);
+  dataString += ",";
+  dataString += String(Temperature);
+  dataString += ",";
+  dataString += String(Humidity);
+  dataString += ",";
+
+  coordInt = float(int(GPS.longitude / 100));
+  coordDec = (GPS.longitude - coordInt * 100) / 60;
+  Longitude = coordInt + coordDec;
+  if (GPS.lon == 'W')
+  {
+    Longitude = Longitude * (-1);
+  }
+
+  dataString += String(Longitude, 7); //Saves the longitdue value
+  dataString += ",";
+
+  coordInt = float(int(GPS.latitude / 100));
+  coordDec = (GPS.latitude - coordInt * 100) / 60;
+  Latitude = coordInt + coordDec;
+  if (GPS.lat == 'S')
+  {
+    Latitude = Latitude * (-1);
+  }
+  dataString += String(Latitude, 7);
+
+  // open the file. note that only one file can be open at a time,
+  // so you have to close this one before opening another.
+  File dataFile = SD.open("datalog.csv", FILE_WRITE);
+  Serial.println("success");
+  Serial.println("success");
+  Serial.println("success");
+  Serial.println("success");
+
+  // if the file is available, write to it:
+  if (dataFile) {
+    dataFile.println(dataString);
+    dataFile.close();
+    // print to the serial port too:
+  }
+  // if the file isn't open, pop up an error:
+  else {
+    Serial.println("error opening datalog.csv");
+  }
+
+  digitalWrite(chipSelect, HIGH); /////////////////////////needs testing/////////////
+  //SD.end();
+  Serial.println("\nLOOP SD END");
+  ///////////////////////////////////////// LOOP SD END ////////////////////////////////////////////////////////////////////////////////////
+  
+  ///////////////////////////////////////// LOOP WIFI BEGIN ////////////////////////////////////////////////////////////////////////////////////
+  Serial.println("\nLOOP WIFI BEGIN");
+
+  WiFiClient client;  //Instantiate WiFi object
+
+  Queue readingBuffer;
+
+  status = WiFi.status();
+
+  if (status == WL_CONNECTED) {
+    Serial.println("WL_CONNECTED");
+  } else if (status == WL_AP_CONNECTED) {
+    Serial.println("WL_AP_CONNECTED");
+  } else if (status == WL_AP_LISTENING) {
+    Serial.println("WL_AP_LISTENING");
+  } else if (status == WL_NO_SHIELD) {
+    Serial.println("WL_NO_SHIELD");
+  } else if (status == WL_NO_MODULE) {
+    Serial.println("WL_NO_MODULE");
+  } else if (status == WL_IDLE_STATUS) {
+    Serial.println("WL_IDLE_STATUS");
+  } else if (status == WL_NO_SSID_AVAIL) {
+    Serial.println("WL_NO_SSID_AVAIL");
+  } else if (status == WL_SCAN_COMPLETED) {
+    Serial.println("WL_SCAN_COMPLETED");
+  } else if (status == WL_CONNECT_FAILED) {
+    Serial.println("WL_CONNECT_FAILED");
+  } else if (status == WL_CONNECTION_LOST) {
+    Serial.println("WL_CONNECTION_LOST");
+  } else if (status == WL_DISCONNECTED) {
+    Serial.println("WL_DISCONNECTED");
+  } else {
+    Serial.println("ERROR WIFI STATUS");
+  }
+
+  if (status != WL_CONNECTED && Connected) {
+    Serial.println("You have disconnected from the WiFi!");
+    Connected = false;
+    WiFi.begin(MY_SSID, MY_PWD);
+  }
+  else if (status == WL_CONNECTED && !Connected) {
+    Serial.println();
+    Serial.println("Connected to wifi");
+    printWifiStatus();
+
+    Connected = true;
+  }
+
+  Serial.println("\nbefore buffer begin");
+  /////////////////////////////////////Buffer Begin//////////////////////////////////////////
+  //offlineBuffer temp = {String(Date), String(Time), String(Temperature, 1), String(Humidity, 1), String(Longitude, 7), String(Latitude, 7), NULL};
+  //String test = temp.temperatureBuffer;
+  //Serial.println("\ntesting temp.Temperature: " + temp.temperatureBuffer);
+
+
+  readingBuffer.addReading(String(Date), String(Time), String(Temperature, 1), String(Humidity, 1), String(Longitude, 7), String(Latitude, 7));
+
+
+  readingBuffer.displayQueue();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  /*
+    temp->dateBuffer = String(Date);
+    Serial.println("\ndate assigned");
+    temp->timeBuffer = String(Time);
+    temp->temperatureBuffer = String(Temperature,1);
+    temp->humidityBuffer = String(Humidity,1);
+    temp->longitudeBuffer = String(Longitude,7);
+    temp->latitudeBuffer = String(Latitude,7);               //In this chunk, we are adding the readings to a buffer/queue
+    Serial.println("\nothers assigned");
+    temp->next = NULL;
+    Serial.println("\nnext assigned");
+  */
+
+
+
+/*
+  if (head == NULL) {
+    Serial.println("\n buffer is empty");
+    head = &temp;
+    tail = &temp;
+  }
+  else {
+    Serial.println("\n buffer is not empty");
+    tail->next = &temp;
+    tail = &temp;
+  }                                  /////////////////////////////////////Buffer End//////////////////////////////////////////
+
+  //Serial.println("\nhead.Temperature: " + head->temperatureBuffer);
+  //Serial.println("\ntail.Temperature: " + tail->temperatureBuffer);
+
+  Serial.println("\n buffer end");
+
+  Serial.println();
+  //Serial.println("temp->temp: " + temp.temperatureBuffer);
+  Serial.println();
+
+  status = WiFi.status();
+  Serial.println("\nbefore upload begin");
+  if (status == WL_CONNECTED) {     /////////////////////////////////////Upload Begin//////////////////////////////////////////
+
+    while (head != NULL) {
+      Serial.println("uploading start");
+
+      struct offlineBuffer *upload = head;
+
+      Serial.println("before head updated");
+      head = head->next;
+      Serial.println("after head updated");
+
+      String tempDate = upload->dateBuffer;
+      String tempTime = upload->timeBuffer;
+      String tempTemp = upload->temperatureBuffer;
+      String tempHum = upload->humidityBuffer;
+      String tempLong = upload->longitudeBuffer;
+      String tempLat = upload->latitudeBuffer;
+
+      Serial.println();
+      Serial.println("********************************************************************");
+      Serial.println("date: " + tempDate + " time: " + head->timeBuffer);
+      Serial.println("********************************************************************");
+      Serial.println();
+
+      //API service using WiFi Client through PushingBox then relayed to Google
+      if (client.connect(WEBSITE, 80)) {
+        client.print("GET /pushingbox?devid=" + devid
+                     + "&Date=" + tempDate
+                     + "&Time=" + tempTime
+                     + "&Temperature=" + tempTemp
+                     + "&Humidity=" + tempHum
+                     + "&Longitude=" + tempLong
+                     + "&Latitude=" + tempLat);
+        //Serial.println("connection made");
+        // HTTP 1.1 provides a persistent connection, allowing batched requests
+        // or pipelined to an output buffer
+        client.println(" HTTP/1.1");
+        client.print("Host: ");
+        client.println(WEBSITE);
+        client.println("User-Agent: MKR1010");
+        client.println();
+      }
+
+      if (head == NULL)
+        tail = NULL;
+
+      delete upload;
+    //}
+
+    //Serial.println("uploading done");
+  //}                                 /////////////////////////////////////Upload End//////////////////////////////////////////
+  */
+  //temp = NULL;
+
+  status = WiFi.status();
+
+  Serial.println("\nLOOP WIFI END");
+  ///////////////////////////////////////// LOOP WIFI END ////////////////////////////////////////////////////////////////////////////////////
+
+} //End of Loop ****************************************************************************************************
+
+///////////////////////////////////////// GPS BEGIN ////////////////////////////////////////////////////////////////////////////////////
+
+#ifdef NMEA_EXTENSIONS
+void updateBoat() { // fill up the boat values with some test data to use in
+  // build()
+  double t = millis() / 1000.;
+  double theta = t / 100.;   // slow
+  double gamma = theta * 10; // faster
+  Boat.latitude = 4400 + sin(theta) * 60;
+  Boat.lat = 'N';
+  Boat.longitude = 7600 + cos(theta) * 60;
+  Boat.lon = 'W';
+  Boat.fixquality = 2;
+  Boat.speed = 3 + sin(gamma);
+  Boat.hour = abs(cos(theta)) * 24;
+  Boat.minute = 30 + sin(theta / 2) * 30;
+  Boat.seconds = 30 + sin(gamma) * 30;
+  Boat.milliseconds = 500 + sin(gamma) * 500;
+  Boat.year = 1 + abs(sin(theta)) * 25;
+  Boat.month = 1 + abs(sin(gamma)) * 11;
+  Boat.day = 1 + abs(sin(gamma)) * 26;
+  Boat.satellites = abs(cos(gamma)) * 10;
+}
+#endif
+
+///////////////////////////////////////// GPS END ////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////// WIFI BEGIN ////////////////////////////////////////////////////////////////////////////////////
+
+void printWifiStatus() {
+  // print the SSID of the network you're attached to:
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  // print your WiFi shield's IP address:
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
+
+  // print the received signal strength:
+  long rssi = WiFi.RSSI();
+  Serial.print("signal strength (RSSI):");
+  Serial.print(rssi);
+  Serial.println(" dBm");
+}
+/*
+boolean isBufferEmpty() {
+  if (head == NULL && tail == NULL)
+    return true;
+  else
+    return false;
+}
+*/
+/*
+  void addReading(String dateInput, String timeInput, String tempInput, String humInput, String longInput, String latInput) {
+  struct offlineBuffer temp;
+
+  temp.dateBuffer = dateInput;
+  temp.timeBuffer = timeInput;
+  temp.temperatureBuffer = tempInput;
+  temp.humidityBuffer = humInput;
+  temp.longitudeBuffer = longInput;
+  temp.latitudeBuffer = latInput;
+
+  temp.next = NULL;
+  //Serial.println("temp filled");
+  if(isBufferEmpty()) {
+    head = tail = &temp;
+    return;
+  }
+  tail->next = &temp;
+  tail = &temp;
+  //Serial.println("tail updated");
+  free(&temp);
+  //Serial.println("reading added");
+  return;
+  }
+*/
+/*
+  void uploadReading() {
+  Serial.println("uploading start");
+
+  String tempDate = head->dateBuffer;
+  String tempTime = head->timeBuffer;
+  String tempTemp = head->temperatureBuffer;
+  String tempHum = head->humidityBuffer;
+  String tempLong = head->longitudeBuffer;
+  String tempLat = head->latitudeBuffer;
+
+  Serial.println("test");
+  //Serial.println("date: " + tempDate + " time: " + tempTime);
+
+
+  //API service using WiFi Client through PushingBox then relayed to Google
+  if(client.connect(WEBSITE, 80)) {
+    client.print("GET /pushingbox?devid=" + devid
+                  + "&Date=" + head->dateBuffer
+                  + "&Time=" + head->timeBuffer
+                  + "&Temperature=" + head->temperatureBuffer
+                  + "&Humidity=" + head->humidityBuffer
+                  + "&Longitude=" + head->longitudeBuffer
+                  + "&Latitude=" + head->latitudeBuffer);
+    Serial.println("connection made");
+    // HTTP 1.1 provides a persistent connection, allowing batched requests
+    // or pipelined to an output buffer
+    client.println(" HTTP/1.1");
+    client.print("Host: ");
+    client.println(WEBSITE);
+    client.println("User-Agent: MKR1010");
+    client.println();
+  }
+  Serial.println("b4 head updated");
+  head = head->next;
+  Serial.println("after head updated");
+
+  if(head == NULL)
+    tail = NULL;
+  Serial.println("uploading done");
+  return;
+  }
+*/
+///////////////////////////////////////// WIFI END ////////////////////////////////////////////////////////////////////////////////////

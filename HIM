@@ -618,7 +618,7 @@ void loop() {
     tft.print("Power: ");
     //insert power code here
     tft.print("%\n");
-    tft.print(GPS.latitude); tft.print(", "); tft.print(GPS.longitude); //prints location
+    tft.print(Latitude); tft.print(", "); tft.print(Longitude); //prints location
 
    /* tft.setCursor(30, 260);
       tft.setTextColor(WHITE, RED);

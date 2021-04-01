@@ -571,11 +571,11 @@ void loop() {
 
 
   Serial.print(F("Humidity: "));
-  Serial.print(h);
+  Serial.print(Humidity);
   Serial.print(F("%  Temperature: "));
   //Serial.print(t);
   //Serial.print(F("°C "));
-  Serial.print(f);
+  Serial.print(Temperature);
   //Serial.print(F("°F  Heat index: "));
   //Serial.print(hic);
   //Serial.print(F("°C "));
@@ -1003,7 +1003,7 @@ void loop() {
 
   Serial.println("\nLOOP WIFI END");
   ///////////////////////////////////////// LOOP WIFI END ////////////////////////////////////////////////////////////////////////////////////
-delay(30000);
+delay(60000);
 } //End of Loop ****************************************************************************************************
 
 

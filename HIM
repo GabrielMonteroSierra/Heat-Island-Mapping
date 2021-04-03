@@ -186,6 +186,7 @@ float Latitude = 0.0;
 
 void setup() {
   Serial.begin(115200);
+  while(!Serial);
 
   if (!ECCX08.begin()) {
     Serial.println("No ECCX08 present!");
@@ -211,10 +212,11 @@ void setup() {
   File dataFile;
   String labels = "";
   if (SD.exists("datalog.csv")) {
+    Serial.println("Test opening datalog.csv ...");
     dataFile = SD.open("datalog.csv", FILE_WRITE);
     dataFile.close();
   } else {
-    Serial.println("Creating file...");
+    Serial.println("Creating file ...");
     dataFile = SD.open("datalog.csv", FILE_WRITE);
 
     labels += "Date";
@@ -337,7 +339,7 @@ Serial.begin(115200);
   if (status != WL_CONNECTED) {
     WiFi.begin(MY_SSID, MY_PWD);
 
-    delay(5000);
+    delay(1000);
   }
 
   status = WiFi.status();
@@ -360,15 +362,14 @@ Serial.begin(115200);
 } //End of Setup  ****************************************************************************************************
 
 void loop() {
-
- ////////////////////GPS LOOP////////////////////
+  /////////////////////////////////////////  LOOP GPS BEGIN ////////////////////////////////////////////////////////////////////////////////////
   meridianStatus = "";
   Date = "";
   Time = "";
   // put your main code here, to run repeatedly:
  // read data from the GPS in the 'main loop'
   char c = GPS.read();
-    String dataString = "";
+
   float coordInt = 0.0;
   float coordDec = 0.0;
 
@@ -393,6 +394,7 @@ void loop() {
   if (millis() - timer > 2000) {
     timer = millis(); // reset the timer
     //Serial.print("\nTime: ");
+    
    /* if (GPS.hour < 10) { Serial.print('0'); }
     Serial.print(GPS.hour, DEC); Serial.print(':');
     if (GPS.minute < 10) { Serial.print('0'); }
@@ -409,16 +411,14 @@ void loop() {
     Serial.print(GPS.day, DEC); Serial.print('/');
     Serial.print(GPS.month, DEC); Serial.print("/20");
     Serial.println(GPS.year, DEC);*/
+    
     second = GPS.seconds;
     minute = GPS.minute;
     hour = GPS.hour-5;
     day = GPS.day;
     year = GPS.year + 2000;
     month = GPS.month;
-    // Adjust time and day forward to account for elapsed time.
-    // This will break at month boundaries!!! Humans will have to cope with
-    // April 31,32 etc.
-
+    
     if (hour > 12) {
       hour -= 12;
       meridianStatus = "PM";
@@ -428,35 +428,24 @@ void loop() {
 
     Time = String(hour) + ":" + String(minute) + ":" + String(second) + " " + String(meridianStatus);
     Date = String(month) + "-" + String(day) + "-" + String(year);
-     dataString += String(Date);
-  dataString += ",";
-  dataString += String(Time);
-  dataString += ",";
-  dataString += String(Temperature);
-  dataString += ",";
-  dataString += String(Humidity);
-  dataString += ",";
 
-  coordInt = float(int(GPS.longitude / 100));
-  coordDec = (GPS.longitude - coordInt * 100) / 60;
-  Longitude = coordInt + coordDec;
-  if (GPS.lon == 'W')
-  {
-    Longitude = Longitude * (-1);
-  }
+    coordInt = float(int(GPS.longitude / 100));
+    coordDec = (GPS.longitude - coordInt * 100) / 60;
+    Longitude = coordInt + coordDec;
+    
+    if(GPS.lon == 'W') {
+      Longitude = Longitude * (-1);
+    }
 
-  dataString += String(Longitude, 7); //Saves the longitdue value
-  dataString += ",";
+    coordInt = float(int(GPS.latitude / 100));
+    coordDec = (GPS.latitude - coordInt * 100) / 60;
+    Latitude = coordInt + coordDec;
+    
+    if (GPS.lat == 'S') {
+      Latitude = Latitude * (-1);
+    }
 
-  coordInt = float(int(GPS.latitude / 100));
-  coordDec = (GPS.latitude - coordInt * 100) / 60;
-  Latitude = coordInt + coordDec;
-  if (GPS.lat == 'S')
-  {
-    Latitude = Latitude * (-1);
-  }
-  dataString += String(Latitude, 7);
-
+    Serial.println("\n==========================================================================================================");
     // ISO Standard Date Format, with leading zeros https://xkcd.com/1179/
     Serial.print("\nDate: " + Date);
 
@@ -473,23 +462,25 @@ void loop() {
       Serial.print("Altitude: "); Serial.println(GPS.altitude);
       Serial.print("Satellites: "); Serial.println((int)GPS.satellites);
     }
+    
+    Serial.println("==========================================================================================================");
     /*if (!GPS.fix){
       Serial.print ("whoops");
     }*/
   }
-  ////////////////////GPS LOOP END////////////////////
-       ////////////////////DHT LOOP////////////////////
+  /////////////////////////////////////////  LOOP GPS END ////////////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////  LOOP DHT BEGIN ////////////////////////////////////////////////////////////////////////////////////
 
   // Reading temperature or humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-  float h = dht.readHumidity();
+  float Humidity = dht.readHumidity();
   // Read temperature as Celsius (the default)
-  float t = dht.readTemperature();
+  //float t = dht.readTemperature();
   // Read temperature as Fahrenheit (isFahrenheit = true)
-  float f = dht.readTemperature(true);
+  float Temperature = dht.readTemperature(true);
 
   // Check if any reads failed and exit early (to try again).
-  if (isnan(h) || isnan(t) || isnan(f)) {
+  if (isnan(Humidity) || isnan(Temperature)) {
     Serial.println(F("Failed to read from DHT sensor!"));
     return;
   }
@@ -498,23 +489,26 @@ void loop() {
   Serial.print(F("Humidity: "));
   Serial.print(Humidity);
   Serial.print(F("%  Temperature: "));
-  //Serial.print(t);
-  //Serial.print(F("°C "));
   Serial.print(Temperature);
+  Serial.print(F("°F  Latitude: "));
+  Serial.print(String(Latitude,7));
+  Serial.print(F("  Longitude: "));
+  Serial.print(String(Longitude,7));
   //Serial.print(F("°F  Heat index: "));
   //Serial.print(hic);
   //Serial.print(F("°C "));
   //Serial.print(hif);
   //Serial.println(F("°F"));
-  ////////////////////DHT LOOP END////////////////////
 
-
+  ///////////////////////////////////////// LOOP DHT BEGIN ////////////////////////////////////////////////////////////////////////////////////
   ///////////////////////////////////////// LOOP DISPLAY BEGIN ////////////////////////////////////////////////////////////////////////////////////
 
   pinMode(TFT_CS, OUTPUT);
   SPI.setDataMode(SPI_MODE3);
   
   digitalWrite(TFT_CS, HIGH); /////////////////////needs testing///////////////////
+
+  tft.begin();
   
   Serial.println("\nLOOP DISPLAY BEGIN");
   TSPoint p = ts.getPoint();
@@ -535,15 +529,17 @@ void loop() {
     tft.setTextSize(2);
     tft.print(hour); tft.print(":"); tft.print(minute);
     tft.print("\n\nTemp: ");
-    tft.print(f); tft.print(" "); //tft.print((char)248);
+    tft.print(Temperature); tft.print(" "); //tft.print((char)248);
     tft.print("F\n\n");
     tft.print("Humidity: ");
-    tft.print(h);
+    tft.print(Humidity);
     tft.print(" %\n\n");
     tft.print("Power: ");
     //insert power code here
     tft.print("%\n");
-    tft.print(Latitude); tft.print(", "); tft.print(Longitude); //prints location
+
+    //prints location
+    //tft.print(String(Latitude,3)); tft.print(", "); tft.print(String(Longitude,3));
 
    /* tft.setCursor(30, 260);
       tft.setTextColor(WHITE, RED);
@@ -683,12 +679,13 @@ void loop() {
     tft.println("Storage");
   }
 
+  
+  
   Serial.println("\nLOOP DISPLAY END");
   digitalWrite(TFT_CS, LOW); /////////////////////needs testing///////////////////
 
   ///////////////////////////////////////// LOOP DISPLAY END ////////////////////////////////////////////////////////////////////////////////////
-
-    ///////////////////////////////////////// LOOP SD BEGIN ////////////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////// LOOP SD BEGIN ////////////////////////////////////////////////////////////////////////////////////
   Serial.println("\nLOOP SD BEGIN");
 
   pinMode(chipSelect, OUTPUT);
@@ -696,39 +693,24 @@ void loop() {
  
   digitalWrite(chipSelect, LOW); //////////////////////////needs testing////////////////
 
+  SD.begin();
+
+  
   // make a string for assembling the data to log:
- /* String dataString = "";
-  float coordInt = 0.0;
-  float coordDec = 0.0;
+  String dataString = "";
 
   dataString += String(Date);
   dataString += ",";
   dataString += String(Time);
   dataString += ",";
-  dataString += String(Temperature);
+  dataString += String(Temperature,1);
   dataString += ",";
-  dataString += String(Humidity);
+  dataString += String(Humidity,1);
   dataString += ",";
-
-  coordInt = float(int(GPS.longitude / 100));
-  coordDec = (GPS.longitude - coordInt * 100) / 60;
-  Longitude = coordInt + coordDec;
-  if (GPS.lon == 'W')
-  {
-    Longitude = Longitude * (-1);
-  }
-
   dataString += String(Longitude, 7); //Saves the longitdue value
   dataString += ",";
-
-  coordInt = float(int(GPS.latitude / 100));
-  coordDec = (GPS.latitude - coordInt * 100) / 60;
-  Latitude = coordInt + coordDec;
-  if (GPS.lat == 'S')
-  {
-    Latitude = Latitude * (-1);
-  }
-  dataString += String(Latitude, 7);*/
+  dataString += String(Latitude, 7);
+  
 
   // open the file. note that only one file can be open at a time,
   // so you have to close this one before opening another.
@@ -742,11 +724,12 @@ void loop() {
   }
   // if the file isn't open, pop up an error:
   else {
-    Serial.println("error opening datalog.csv");
+    Serial.println("error opening datalog.csv in sd loop");
   }
 
   digitalWrite(chipSelect, HIGH); /////////////////////////needs testing/////////////
-  //SD.end();
+  
+  SD.end();
   Serial.println("\nLOOP SD END");
   ///////////////////////////////////////// LOOP SD END ////////////////////////////////////////////////////////////////////////////////////
   
@@ -943,7 +926,7 @@ void loop() {
 
   Serial.println("\nLOOP WIFI END");
   ///////////////////////////////////////// LOOP WIFI END ////////////////////////////////////////////////////////////////////////////////////
-delay(60000);
+delay(5000);
 } //End of Loop ****************************************************************************************************
 
 

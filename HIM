@@ -177,81 +177,6 @@ int status = WL_IDLE_STATUS;
 
 bool Connected = false;
 
-struct offlineBuffer {
-  String dateBuffer;
-  String timeBuffer;
-  String temperatureBuffer;
-  String humidityBuffer;
-  String longitudeBuffer;
-  String latitudeBuffer;
-
-  offlineBuffer *next;
-};
-
-class Queue {
-  offlineBuffer *head;
-  offlineBuffer *tail;
-
-  public:
-    Queue() {
-      head = tail = NULL;
-    }
-    void addReading(String dateIn, String timeIn, String tempIn, String humIn, String longIn, String latIn) {
-      offlineBuffer *temp;
-      temp = new offlineBuffer;
-      temp->dateBuffer = dateIn;
-      temp->timeBuffer = timeIn;
-      temp->temperatureBuffer = tempIn;
-      temp->humidityBuffer = humIn;
-      temp->longitudeBuffer = longIn;
-      temp->latitudeBuffer = latIn;
-
-      temp->next = NULL;
-
-      if(head == NULL) {
-        head = tail = temp;
-      }
-      else {
-        tail->next = temp;
-        tail = temp;
-      }
-    }
-    void uploadReading() {
-      offlineBuffer *temp;
-      
-      while(head != NULL) {
-        temp = head;
-        head = head->next;
-        delete temp;
-      }
-    }
-    void displayQueue() {
-      offlineBuffer *temp;
-      temp = head;
-
-      while(temp != NULL) {
-        Serial.println();
-        Serial.println("dateBuffer: " + temp->dateBuffer);
-        Serial.println("timeBuffer: " + temp->timeBuffer);
-        Serial.println("temperatureBuffer: " + temp->temperatureBuffer);
-        Serial.println("humidityBuffer: " + temp->humidityBuffer);
-        Serial.println("longitudeBuffer: " + temp->longitudeBuffer);
-        Serial.println("latitudeBuffer: " + temp->latitudeBuffer);
-        Serial.println();
-        temp = temp->next;
-        delay(100);
-      }
-    }
-};
-
-//offlineBuffer *head = NULL;
-//offlineBuffer *tail = NULL;
-//struct offlineBuffer *temp = NULL;
-
-//ArduinoQueue<offlineBuffer> myQueue();
-
-
-
 //////////WIFI END//////////////
 
 float Temperature = 0.0;
@@ -808,10 +733,6 @@ void loop() {
   // open the file. note that only one file can be open at a time,
   // so you have to close this one before opening another.
   File dataFile = SD.open("datalog.csv", FILE_WRITE);
-  Serial.println("success");
-  Serial.println("success");
-  Serial.println("success");
-  Serial.println("success");
 
   // if the file is available, write to it:
   if (dataFile) {
@@ -833,8 +754,6 @@ void loop() {
   Serial.println("\nLOOP WIFI BEGIN");
 
   WiFiClient client;  //Instantiate WiFi object
-
-  Queue readingBuffer;
 
   status = WiFi.status();
 
@@ -877,18 +796,39 @@ void loop() {
     Connected = true;
   }
 
-  Serial.println("\nbefore buffer begin");
+  
   /////////////////////////////////////Buffer Begin//////////////////////////////////////////
   //offlineBuffer temp = {String(Date), String(Time), String(Temperature, 1), String(Humidity, 1), String(Longitude, 7), String(Latitude, 7), NULL};
   //String test = temp.temperatureBuffer;
   //Serial.println("\ntesting temp.Temperature: " + temp.temperatureBuffer);
 
 
-  readingBuffer.addReading(String(Date), String(Time), String(Temperature, 1), String(Humidity, 1), String(Longitude, 7), String(Latitude, 7));
+  //readingBuffer.addReading(String(Date), String(Time), String(Temperature, 1), String(Humidity, 1), String(Longitude, 7), String(Latitude, 7));
 
 
-  readingBuffer.displayQueue();
 
+  //If WiFi is connected, read data from the sd card and upload it.
+  //To prevent the server from thinking we are preforming a DDOS attack we will delay our uploads. 
+  //One upload every 10 seconds up to 6 uploads max at a time (Would add up to a 1 minute delay).
+  if(status == WL_CONNECTED) {        
+    File dataFile = SD.open("datalog.csv");
+
+    //read from file
+    if (dataFile) {
+      //Serial.println("test.txt:");
+
+      // read from the file until there's nothing else in it:
+      while (dataFile.available()) {    //might change this so its both if there is anyhting left or delay reaches 1 minute
+        String line = String(dataFile.read());    //This should hold everything, need to parse to seperate data
+      }
+      // close the file:
+      dataFile.close();
+    }
+    // if the file isn't open, pop up an error:
+    else {
+      Serial.println("error opening datalog.csv for upload");
+    }
+  }
 
 
 

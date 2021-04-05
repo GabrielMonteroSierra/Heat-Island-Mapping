@@ -358,7 +358,11 @@ Serial.begin(115200);
 
   Serial.println("\nSET UP WIFI END");
   ///////////////////////////////////////// SET UP WIFI END ////////////////////////////////////////////////////////////////////////////////////
-
+  
+  if(!GPS.fix()) {          //If the GPS doesnt have a fix off of boot, wait 30s to search for fix and to reduce junk data like 0-0-2000.
+    delay(30000);
+  }
+  
 } //End of Setup  ****************************************************************************************************
 
 void loop() {

@@ -186,7 +186,7 @@ float Latitude = 0.0;
 
 void setup() {
   Serial.begin(115200);
-  while(!Serial);
+  //while(!Serial);
 
   if (!ECCX08.begin()) {
     Serial.println("No ECCX08 present!");
@@ -359,14 +359,14 @@ Serial.begin(115200);
   Serial.println("\nSET UP WIFI END");
   ///////////////////////////////////////// SET UP WIFI END ////////////////////////////////////////////////////////////////////////////////////
   
-/*  if(!GPS.fix()) {          //If the GPS doesnt have a fix off of boot, wait 30s to search for fix and to reduce junk data like 0-0-2000.
-    delay(30000);
-  }*/
+  //If the GPS doesnt have a fix off of boot, wait 30s to search for fix and to reduce junk data like 0-0-2000.
+  delay(30000);
   
 } //End of Setup  ****************************************************************************************************
 
 void loop() {
   /////////////////////////////////////////  LOOP GPS BEGIN ////////////////////////////////////////////////////////////////////////////////////
+  Serial.println("LOOP GPS BEGIN");
   meridianStatus = "";
   Date = "";
   Time = "";
@@ -430,8 +430,31 @@ void loop() {
       meridianStatus = "AM";
     }
 
-    Time = String(hour) + ":" + String(minute) + ":" + String(second) + " " + String(meridianStatus);
-    Date = String(month) + "-" + String(day) + "-" + String(year);
+    Time = String(hour) + ":";
+    
+    if(minute < 10) {
+      Time += "0" + String(minute) + ":";
+    } else {
+      Time += String(minute) + ":";
+    }
+    
+    if(second < 10) {
+      Time += "0" + String(second) + " " + meridianStatus;
+    }
+    else {
+      Time += String(second) + " " + meridianStatus;
+    }
+      
+    Date = String(month) + "-";
+    
+    if(day < 10) {
+      Date += "0" + String(day) + "-";
+    }
+    else {
+      Date += String(day) + "-";
+    }
+    
+    Date += String(year);
 
     coordInt = float(int(GPS.longitude / 100));
     coordDec = (GPS.longitude - coordInt * 100) / 60;
@@ -448,6 +471,11 @@ void loop() {
     if (GPS.lat == 'S') {
       Latitude = Latitude * (-1);
     }
+    
+    if (isnan(Latitude) || isnan(Longitude)) {              //This is to prevent the code from continuing without a fix
+      Serial.println(F("GPS does not have a fix!"));
+      return;
+    }
 
     Serial.println("\n==========================================================================================================");
     // ISO Standard Date Format, with leading zeros https://xkcd.com/1179/
@@ -461,9 +489,6 @@ void loop() {
       Serial.print(GPS.latitude, 7); Serial.print(GPS.lat);
       Serial.print(", ");
       Serial.print(GPS.longitude, 7); Serial.println(GPS.lon);
-      Serial.print("Speed (knots): "); Serial.println(GPS.speed);
-      Serial.print("Angle: "); Serial.println(GPS.angle);
-      Serial.print("Altitude: "); Serial.println(GPS.altitude);
       Serial.print("Satellites: "); Serial.println((int)GPS.satellites);
     }
     
@@ -472,9 +497,10 @@ void loop() {
       Serial.print ("whoops");
     }*/
   }
+  Serial.println("LOOP GPS END");
   /////////////////////////////////////////  LOOP GPS END ////////////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////  LOOP DHT BEGIN ////////////////////////////////////////////////////////////////////////////////////
-
+  Serial.println("LOOP DHT BEGIN");
   // Reading temperature or humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
   float Humidity = dht.readHumidity();
@@ -503,16 +529,15 @@ void loop() {
   //Serial.print(F("°C "));
   //Serial.print(hif);
   //Serial.println(F("°F"));
-
+  Serial.println("LOOP DHT END");
   ///////////////////////////////////////// LOOP DHT BEGIN ////////////////////////////////////////////////////////////////////////////////////
   ///////////////////////////////////////// LOOP DISPLAY BEGIN ////////////////////////////////////////////////////////////////////////////////////
-
+  Serial.println("\nLOOP DISPLAY BEGIN");
   pinMode(TFT_CS, OUTPUT);
   SPI.setDataMode(SPI_MODE3);
   
   digitalWrite(TFT_CS, HIGH);
   
-  Serial.println("\nLOOP DISPLAY BEGIN");
   TSPoint p = ts.getPoint();
   
   if (menuSelect == 0)
@@ -681,8 +706,6 @@ void loop() {
     tft.println("Storage");
   }
 
-  
-  
   Serial.println("\nLOOP DISPLAY END");
   digitalWrite(TFT_CS, LOW);
 
@@ -731,7 +754,6 @@ void loop() {
 
   Serial.println("\nLOOP SD END");
   ///////////////////////////////////////// LOOP SD END ////////////////////////////////////////////////////////////////////////////////////
-  
   ///////////////////////////////////////// LOOP WIFI BEGIN ////////////////////////////////////////////////////////////////////////////////////
   Serial.println("\nLOOP WIFI BEGIN");
 
@@ -792,25 +814,25 @@ void loop() {
   //If WiFi is connected, read data from the sd card and upload it.
   //To prevent the server from thinking we are preforming a DDOS attack we will delay our uploads. 
   //One upload every 10 seconds up to 6 uploads max at a time (Would add up to a 1 minute delay).
-  if(status == WL_CONNECTED) {        
-    File dataFile = SD.open("datalog.csv");
+  //if(status == WL_CONNECTED) {        
+    //File dataFile = SD.open("datalog.csv");
 
     //read from file
-    if (dataFile) {
+    //if (dataFile) {
       //Serial.println("test.txt:");
 
       // read from the file until there's nothing else in it:
-      while (dataFile.available()) {    //might change this so its both if there is anyhting left or delay reaches 1 minute
-        String line = String(dataFile.read());    //This should hold everything, need to parse to seperate data
-      }
+      //while (dataFile.available()) {    //might change this so its both if there is anyhting left or delay reaches 1 minute
+        //String line = String(dataFile.read());    //This should hold everything, need to parse to seperate data
+      //}
       // close the file:
-      dataFile.close();
-    }
+      //dataFile.close();
+    //}
     // if the file isn't open, pop up an error:
-    else {
-      Serial.println("error opening datalog.csv for upload");
-    }
-  }
+    //else {
+      //Serial.println("error opening datalog.csv for upload");
+    //}
+  //}
 
 
 
@@ -921,11 +943,11 @@ void loop() {
   */
   //temp = NULL;
 
-  status = WiFi.status();
+  //status = WiFi.status();
 
   Serial.println("\nLOOP WIFI END");
   ///////////////////////////////////////// LOOP WIFI END ////////////////////////////////////////////////////////////////////////////////////
-delay(5000);
+delay(60000);
 } //End of Loop ****************************************************************************************************
 
 

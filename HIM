@@ -554,7 +554,13 @@ void loop() {
     tft.setCursor(85, 0);
     tft.setTextColor(WHITE);
     tft.setTextSize(2);
-    tft.print(hour); tft.print(":"); tft.print(minute);
+    tft.print(hour);
+    if(minute < 10){
+      tft.print(":0"); tft.print(minute);
+    }
+    else{
+      tft.print(":"); tft.print(minute);
+    }
     tft.print("\n\nTemp: ");
     tft.print(Temperature); tft.print(" "); //tft.print((char)248);
     tft.print("F\n\n");
@@ -566,7 +572,7 @@ void loop() {
     tft.print("%\n");
 
     //prints location
-    //tft.print(String(Latitude,3)); tft.print(", "); tft.print(String(Longitude,3));
+    tft.print(String(Latitude,3)); tft.print(", "); tft.print(String(Longitude,3));
 
    /* tft.setCursor(30, 260);
       tft.setTextColor(WHITE, RED);
@@ -715,7 +721,9 @@ void loop() {
 
   pinMode(chipSelect, OUTPUT);
   SPI.setDataMode(SPI_MODE0); 
- 
+
+  SD.begin();
+  
   digitalWrite(chipSelect, LOW);
   
   // make a string for assembling the data to log:
@@ -750,7 +758,8 @@ void loop() {
   }
 
   digitalWrite(chipSelect, HIGH); /////////////////////////needs testing/////////////
-  
+
+  SD.end();
 
   Serial.println("\nLOOP SD END");
   ///////////////////////////////////////// LOOP SD END ////////////////////////////////////////////////////////////////////////////////////

@@ -359,9 +359,9 @@ Serial.begin(115200);
   Serial.println("\nSET UP WIFI END");
   ///////////////////////////////////////// SET UP WIFI END ////////////////////////////////////////////////////////////////////////////////////
   
-  if(!GPS.fix()) {          //If the GPS doesnt have a fix off of boot, wait 30s to search for fix and to reduce junk data like 0-0-2000.
+/*  if(!GPS.fix()) {          //If the GPS doesnt have a fix off of boot, wait 30s to search for fix and to reduce junk data like 0-0-2000.
     delay(30000);
-  }
+  }*/
   
 } //End of Setup  ****************************************************************************************************
 
@@ -510,9 +510,7 @@ void loop() {
   pinMode(TFT_CS, OUTPUT);
   SPI.setDataMode(SPI_MODE3);
   
-  digitalWrite(TFT_CS, HIGH); /////////////////////needs testing///////////////////
-
-  tft.begin();
+  digitalWrite(TFT_CS, HIGH);
   
   Serial.println("\nLOOP DISPLAY BEGIN");
   TSPoint p = ts.getPoint();
@@ -686,7 +684,7 @@ void loop() {
   
   
   Serial.println("\nLOOP DISPLAY END");
-  digitalWrite(TFT_CS, LOW); /////////////////////needs testing///////////////////
+  digitalWrite(TFT_CS, LOW);
 
   ///////////////////////////////////////// LOOP DISPLAY END ////////////////////////////////////////////////////////////////////////////////////
   ///////////////////////////////////////// LOOP SD BEGIN ////////////////////////////////////////////////////////////////////////////////////
@@ -695,10 +693,7 @@ void loop() {
   pinMode(chipSelect, OUTPUT);
   SPI.setDataMode(SPI_MODE0); 
  
-  digitalWrite(chipSelect, LOW); //////////////////////////needs testing////////////////
-
-  SD.begin();
-
+  digitalWrite(chipSelect, LOW);
   
   // make a string for assembling the data to log:
   String dataString = "";
@@ -733,7 +728,7 @@ void loop() {
 
   digitalWrite(chipSelect, HIGH); /////////////////////////needs testing/////////////
   
-  SD.end();
+
   Serial.println("\nLOOP SD END");
   ///////////////////////////////////////// LOOP SD END ////////////////////////////////////////////////////////////////////////////////////
   

@@ -187,7 +187,7 @@ float Latitude = 0.0;
 
 void setup() {
   Serial.begin(115200);
-  //while(!Serial);
+  while(!Serial);
 
   if (!ECCX08.begin()) {
     Serial.println("No ECCX08 present!");
@@ -363,7 +363,7 @@ void setup() {
   ///////////////////////////////////////// SET UP WIFI END ////////////////////////////////////////////////////////////////////////////////////
   
   //Wait 30s to find a fix as an intial boot up.
-  delay(30000);
+  //delay(30000);
   
 } //End of Setup  ****************************************************************************************************
 
@@ -423,7 +423,14 @@ void loop() {
     
     second = GPS.seconds;
     minute = GPS.minute;
-    hour = GPS.hour-5;
+
+    if(GPS.hour > 5) {
+      hour = GPS.hour - 5;
+    }
+    else {
+      hour = GPS.hour - 5 + 24;
+    }
+    
     day = GPS.day;
     year = GPS.year + 2000;
     month = GPS.month;
@@ -533,7 +540,8 @@ void loop() {
   //Serial.print(F("°C "));
   //Serial.print(hif);
   //Serial.println(F("°F"));
-  Serial.println("LOOP DHT END");
+  
+  Serial.println("\nLOOP DHT END");
   ///////////////////////////////////////// LOOP DHT BEGIN ////////////////////////////////////////////////////////////////////////////////////
   ///////////////////////////////////////// LOOP DISPLAY BEGIN ////////////////////////////////////////////////////////////////////////////////////
   Serial.println("\nLOOP DISPLAY BEGIN");
@@ -541,6 +549,8 @@ void loop() {
   SPI.setDataMode(SPI_MODE3);
   
   digitalWrite(TFT_CS, HIGH);
+
+  tft.begin();
   
   TSPoint p = ts.getPoint();
   
@@ -726,9 +736,9 @@ void loop() {
   pinMode(chipSelect, OUTPUT);
   SPI.setDataMode(SPI_MODE0); 
 
-  SD.begin();
-  
   digitalWrite(chipSelect, LOW);
+
+  SD.begin();
   
   // make a string for assembling the data to log:
   String dataString = "";
@@ -748,6 +758,7 @@ void loop() {
 
   // open the file. note that only one file can be open at a time,
   // so you have to close this one before opening another.
+
   File dataFile = SD.open("datalog.csv", FILE_WRITE);
 
   // if the file is available, write to it:
@@ -769,7 +780,7 @@ void loop() {
   ///////////////////////////////////////// LOOP SD END ////////////////////////////////////////////////////////////////////////////////////
   ///////////////////////////////////////// LOOP WIFI BEGIN ////////////////////////////////////////////////////////////////////////////////////
   Serial.println("\nLOOP WIFI BEGIN");
-
+/*
   WiFiClient client;  //Instantiate WiFi object
 
   int fileLine = 0;
@@ -818,9 +829,13 @@ void loop() {
   }
 
   if(status == WL_CONNECTED) {
+    //SD.begin();
+    Serial.println("before dataFile");
     dataFile = SD.open("datalog.csv");
+    Serial.println("after dataFile");
     if(dataFile) {
-      if(client.connect(WEBSITE,80) {
+      Serial.println("File opened in wifi.");
+      if(client.connect(WEBSITE,80)) {
         for(int i = 0; i < 6; i++) {
           if(!dataFile.available()) {
             Serial.println("All data in the file has been uploaded.");
@@ -882,14 +897,17 @@ void loop() {
       dataFile.close();
     }
     else {
-      Serial.println("error opening datalog.csv in wifi"
+      Serial.println("error opening datalog.csv in wifi");
     }
+    //SD.end();
   }
   else {
     Serial.println("You are not connected to the internet.");
     WiFi.begin(MY_SSID, MY_PWD);
   }
 
+  SD.end();
+*/
   Serial.println("\nLOOP WIFI END");
   ///////////////////////////////////////// LOOP WIFI END ////////////////////////////////////////////////////////////////////////////////////
   
@@ -919,6 +937,7 @@ void printWifiStatus() {
   Serial.print("signal strength (RSSI):");
   Serial.print(rssi);
   Serial.println(" dBm");
+  Serial.println();
 }
 
 ///////////////////////////////////////// WIFI END ////////////////////////////////////////////////////////////////////////////////////

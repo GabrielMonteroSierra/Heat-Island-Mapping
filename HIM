@@ -176,6 +176,7 @@ const char* MY_PWD =  "12345678";
 int status = WL_IDLE_STATUS;
 
 bool Connected = false;
+int latestUploadedLine = -1;
 
 //////////WIFI END//////////////
 
@@ -237,19 +238,19 @@ void setup() {
   digitalWrite(chipSelect, HIGH);
   Serial.println("\nSET UP SD END");
   ///////////////////////////////////////// SET UP SD END ////////////////////////////////////////////////////////////////////////////////////
-  ////////////////////DHT SETUP////////////////////
+  ///////////////////////////////////////// SET UP DHT BEGIN ////////////////////////////////////////////////////////////////////////////////////
   // put your setup code here, to run once:
-  //while (!Serial); 
-Serial.begin(115200);
+  Serial.println("\nSET UP DHT BEGIN");
   Serial.println(F("DHTxx test!"));
 
   dht.begin();
-  //while (!Serial);  // uncomment to have the sketch wait until Serial is ready
-////////////////////DHT SETUP END////////////////////
+  Serial.println("\nSET UP DHT END");
+  ///////////////////////////////////////// SET UP DHT END ////////////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////// SET UP GPS BEGIN ////////////////////////////////////////////////////////////////////////////////////
+  Serial.println("\nSET UP GPS BEGIN");
   // connect at 115200 so we can read the GPS fast enough and echo without dropping chars
   // also spit it out
   //Serial.begin(115200);
-  ////////////////////GPS SETUP////////////////////
   Serial.println("Adafruit GPS library basic test!");
 
   // 9600 NMEA is the default baud rate for Adafruit MTK GPS's- some use 4800
@@ -272,10 +273,11 @@ Serial.begin(115200);
 
   // Ask for firmware version
   GPSSerial.println(PMTK_Q_RELEASE);
-  ////////////////////GPS SETUP END////////////////////
+  Serial.println("\nSET UP GPS END");
+  ///////////////////////////////////////// SET UP GPS END ////////////////////////////////////////////////////////////////////////////////////
   ///////////////////////////////////////// SET UP DISPLAY BEGIN ////////////////////////////////////////////////////////////////////////////////////
 
-  Serial.println("Display Begin");
+  Serial.println("\nSET UP DISPLAY BEGIN");
 
   pinMode(TFT_CS, OUTPUT);
   digitalWrite(TFT_CS, HIGH); ////////////////////////////////////needs testing//////////
@@ -327,6 +329,7 @@ Serial.begin(115200);
   tft.println("Storage");
 
   digitalWrite(TFT_CS, LOW);
+  Serial.println("\nSET UP DISPLAY END");
 
   ///////////////////////////////////////// SET UP DISPLAY END ////////////////////////////////////////////////////////////////////////////////////
   ///////////////////////////////////////// SET UP WIFI BEGIN ////////////////////////////////////////////////////////////////////////////////////
@@ -359,14 +362,16 @@ Serial.begin(115200);
   Serial.println("\nSET UP WIFI END");
   ///////////////////////////////////////// SET UP WIFI END ////////////////////////////////////////////////////////////////////////////////////
   
-  //If the GPS doesnt have a fix off of boot, wait 30s to search for fix and to reduce junk data like 0-0-2000.
+  //Wait 30s to find a fix as an intial boot up.
   delay(30000);
   
 } //End of Setup  ****************************************************************************************************
 
 void loop() {
+  int delayTimer = 60000;
   /////////////////////////////////////////  LOOP GPS BEGIN ////////////////////////////////////////////////////////////////////////////////////
-  Serial.println("LOOP GPS BEGIN");
+  Serial.println("\nLOOP GPS BEGIN");
+  
   meridianStatus = "";
   Date = "";
   Time = "";
@@ -497,10 +502,10 @@ void loop() {
       Serial.print ("whoops");
     }*/
   }
-  Serial.println("LOOP GPS END");
+  Serial.println("\nLOOP GPS END");
   /////////////////////////////////////////  LOOP GPS END ////////////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////  LOOP DHT BEGIN ////////////////////////////////////////////////////////////////////////////////////
-  Serial.println("LOOP DHT BEGIN");
+  Serial.println("\nLOOP DHT BEGIN");
   // Reading temperature or humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
   float Humidity = dht.readHumidity();
@@ -514,7 +519,6 @@ void loop() {
     Serial.println(F("Failed to read from DHT sensor!"));
     return;
   }
-
 
   Serial.print(F("Humidity: "));
   Serial.print(Humidity);
@@ -768,6 +772,10 @@ void loop() {
 
   WiFiClient client;  //Instantiate WiFi object
 
+  int fileLine = 0;
+  char nextChar;
+  String lineBuffer = "";
+
   status = WiFi.status();
 
   if (status == WL_CONNECTED) {
@@ -809,154 +817,88 @@ void loop() {
     Connected = true;
   }
 
+  if(status == WL_CONNECTED) {
+    dataFile = SD.open("datalog.csv");
+    if(dataFile) {
+      if(client.connect(WEBSITE,80) {
+        for(int i = 0; i < 6; i++) {
+          if(!dataFile.available()) {
+            Serial.println("All data in the file has been uploaded.");
+            break;
+          }
+
+          while(dataFile.available()) {
+            nextChar = dataFile.read();
+
+            if(fileLine > latestUploadedLine) {
+              lineBuffer += nextChar;
   
-  /////////////////////////////////////Buffer Begin//////////////////////////////////////////
-  //offlineBuffer temp = {String(Date), String(Time), String(Temperature, 1), String(Humidity, 1), String(Longitude, 7), String(Latitude, 7), NULL};
-  //String test = temp.temperatureBuffer;
-  //Serial.println("\ntesting temp.Temperature: " + temp.temperatureBuffer);
+              if(nextChar == '\n') {
+                latestUploadedLine++;
+                fileLine++;
+    
+                int firstComma = lineBuffer.indexOf(',');
+                int secondComma = lineBuffer.indexOf(',', firstComma + 1);
+                int thirdComma = lineBuffer.indexOf(',', secondComma + 1);
+                int fouthComma = lineBuffer.indexOf(',', thirdComma + 1);
+                int fifthComma = lineBuffer.indexOf(',', fouthComma + 1);
+  
+                String parsedDate = lineBuffer.substring(0, firstComma);
+                String parsedTime = lineBuffer.substring(firstComma + 1, secondComma);
+                String parsedTemperature = lineBuffer.substring(secondComma + 1, thirdComma);
+                String parsedHumidity = lineBuffer.substring(thirdComma + 1, fouthComma);
+                String parsedLongitude = lineBuffer.substring(fouthComma + 1, fifthComma);
+                String parsedLatitude = lineBuffer.substring(fifthComma + 1);
 
+                client.print("GET /pushingbox?devid=" + devid
+                              + "&Date=" + parsedDate
+                              + "&Time=" + parsedTime
+                              + "&Temperature=" + parsedTemperature
+                              + "&Humidity=" + parsedHumidity
+                              + "&Longitude=" + parsedLongitude
+                              + "&Latitude=" + parsedLatitude);
+                //Serial.println("connection made");
+                // HTTP 1.1 provides a persistent connection, allowing batched requests
+                // or pipelined to an output buffer
+                client.println(" HTTP/1.1");
+                client.print("Host: ");
+                client.println(WEBSITE);
+                client.println("User-Agent: MKR1010");
+                client.println();
 
-  //readingBuffer.addReading(String(Date), String(Time), String(Temperature, 1), String(Humidity, 1), String(Longitude, 7), String(Latitude, 7));
+                delayTimer -= 10000;
 
-
-
-  //If WiFi is connected, read data from the sd card and upload it.
-  //To prevent the server from thinking we are preforming a DDOS attack we will delay our uploads. 
-  //One upload every 10 seconds up to 6 uploads max at a time (Would add up to a 1 minute delay).
-  //if(status == WL_CONNECTED) {        
-    //File dataFile = SD.open("datalog.csv");
-
-    //read from file
-    //if (dataFile) {
-      //Serial.println("test.txt:");
-
-      // read from the file until there's nothing else in it:
-      //while (dataFile.available()) {    //might change this so its both if there is anyhting left or delay reaches 1 minute
-        //String line = String(dataFile.read());    //This should hold everything, need to parse to seperate data
-      //}
-      // close the file:
-      //dataFile.close();
-    //}
-    // if the file isn't open, pop up an error:
-    //else {
-      //Serial.println("error opening datalog.csv for upload");
-    //}
-  //}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  /*
-    temp->dateBuffer = String(Date);
-    Serial.println("\ndate assigned");
-    temp->timeBuffer = String(Time);
-    temp->temperatureBuffer = String(Temperature,1);
-    temp->humidityBuffer = String(Humidity,1);
-    temp->longitudeBuffer = String(Longitude,7);
-    temp->latitudeBuffer = String(Latitude,7);               //In this chunk, we are adding the readings to a buffer/queue
-    Serial.println("\nothers assigned");
-    temp->next = NULL;
-    Serial.println("\nnext assigned");
-  */
-
-
-
-/*
-  if (head == NULL) {
-    Serial.println("\n buffer is empty");
-    head = &temp;
-    tail = &temp;
+                delay(10000);
+                break;
+              }
+            }
+            if(nextChar == '\n') {
+              fileLine++;
+            }
+          }
+          lineBuffer = "";
+        }
+      }
+      dataFile.close();
+    }
+    else {
+      Serial.println("error opening datalog.csv in wifi"
+    }
   }
   else {
-    Serial.println("\n buffer is not empty");
-    tail->next = &temp;
-    tail = &temp;
-  }                                  /////////////////////////////////////Buffer End//////////////////////////////////////////
-
-  //Serial.println("\nhead.Temperature: " + head->temperatureBuffer);
-  //Serial.println("\ntail.Temperature: " + tail->temperatureBuffer);
-
-  Serial.println("\n buffer end");
-
-  Serial.println();
-  //Serial.println("temp->temp: " + temp.temperatureBuffer);
-  Serial.println();
-
-  status = WiFi.status();
-  Serial.println("\nbefore upload begin");
-  if (status == WL_CONNECTED) {     /////////////////////////////////////Upload Begin//////////////////////////////////////////
-
-    while (head != NULL) {
-      Serial.println("uploading start");
-
-      struct offlineBuffer *upload = head;
-
-      Serial.println("before head updated");
-      head = head->next;
-      Serial.println("after head updated");
-
-      String tempDate = upload->dateBuffer;
-      String tempTime = upload->timeBuffer;
-      String tempTemp = upload->temperatureBuffer;
-      String tempHum = upload->humidityBuffer;
-      String tempLong = upload->longitudeBuffer;
-      String tempLat = upload->latitudeBuffer;
-
-      Serial.println();
-      Serial.println("********************************************************************");
-      Serial.println("date: " + tempDate + " time: " + head->timeBuffer);
-      Serial.println("********************************************************************");
-      Serial.println();
-
-      //API service using WiFi Client through PushingBox then relayed to Google
-      if (client.connect(WEBSITE, 80)) {
-        client.print("GET /pushingbox?devid=" + devid
-                     + "&Date=" + tempDate
-                     + "&Time=" + tempTime
-                     + "&Temperature=" + tempTemp
-                     + "&Humidity=" + tempHum
-                     + "&Longitude=" + tempLong
-                     + "&Latitude=" + tempLat);
-        //Serial.println("connection made");
-        // HTTP 1.1 provides a persistent connection, allowing batched requests
-        // or pipelined to an output buffer
-        client.println(" HTTP/1.1");
-        client.print("Host: ");
-        client.println(WEBSITE);
-        client.println("User-Agent: MKR1010");
-        client.println();
-      }
-
-      if (head == NULL)
-        tail = NULL;
-
-      delete upload;
-    //}
-
-    //Serial.println("uploading done");
-  //}                                 /////////////////////////////////////Upload End//////////////////////////////////////////
-  */
-  //temp = NULL;
-
-  //status = WiFi.status();
+    Serial.println("You are not connected to the internet.");
+    WiFi.begin(MY_SSID, MY_PWD);
+  }
 
   Serial.println("\nLOOP WIFI END");
   ///////////////////////////////////////// LOOP WIFI END ////////////////////////////////////////////////////////////////////////////////////
-delay(60000);
+  
+  if(delayTimer > 0) {
+    delay(delayTimer);
+  }
+  else {
+    return;
+  }
 } //End of Loop ****************************************************************************************************
 
 
@@ -978,80 +920,5 @@ void printWifiStatus() {
   Serial.print(rssi);
   Serial.println(" dBm");
 }
-/*
-boolean isBufferEmpty() {
-  if (head == NULL && tail == NULL)
-    return true;
-  else
-    return false;
-}
-*/
-/*
-  void addReading(String dateInput, String timeInput, String tempInput, String humInput, String longInput, String latInput) {
-  struct offlineBuffer temp;
 
-  temp.dateBuffer = dateInput;
-  temp.timeBuffer = timeInput;
-  temp.temperatureBuffer = tempInput;
-  temp.humidityBuffer = humInput;
-  temp.longitudeBuffer = longInput;
-  temp.latitudeBuffer = latInput;
-
-  temp.next = NULL;
-  //Serial.println("temp filled");
-  if(isBufferEmpty()) {
-    head = tail = &temp;
-    return;
-  }
-  tail->next = &temp;
-  tail = &temp;
-  //Serial.println("tail updated");
-  free(&temp);
-  //Serial.println("reading added");
-  return;
-  }
-*/
-/*
-  void uploadReading() {
-  Serial.println("uploading start");
-
-  String tempDate = head->dateBuffer;
-  String tempTime = head->timeBuffer;
-  String tempTemp = head->temperatureBuffer;
-  String tempHum = head->humidityBuffer;
-  String tempLong = head->longitudeBuffer;
-  String tempLat = head->latitudeBuffer;
-
-  Serial.println("test");
-  //Serial.println("date: " + tempDate + " time: " + tempTime);
-
-
-  //API service using WiFi Client through PushingBox then relayed to Google
-  if(client.connect(WEBSITE, 80)) {
-    client.print("GET /pushingbox?devid=" + devid
-                  + "&Date=" + head->dateBuffer
-                  + "&Time=" + head->timeBuffer
-                  + "&Temperature=" + head->temperatureBuffer
-                  + "&Humidity=" + head->humidityBuffer
-                  + "&Longitude=" + head->longitudeBuffer
-                  + "&Latitude=" + head->latitudeBuffer);
-    Serial.println("connection made");
-    // HTTP 1.1 provides a persistent connection, allowing batched requests
-    // or pipelined to an output buffer
-    client.println(" HTTP/1.1");
-    client.print("Host: ");
-    client.println(WEBSITE);
-    client.println("User-Agent: MKR1010");
-    client.println();
-  }
-  Serial.println("b4 head updated");
-  head = head->next;
-  Serial.println("after head updated");
-
-  if(head == NULL)
-    tail = NULL;
-  Serial.println("uploading done");
-  return;
-  }
-*/
 ///////////////////////////////////////// WIFI END ////////////////////////////////////////////////////////////////////////////////////

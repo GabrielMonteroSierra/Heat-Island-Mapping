@@ -160,6 +160,8 @@ TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
 //0 = starting menu, 1 = mapping, 2 = cloud
 int menuSelect = 0;
 int mo;
+int vo;
+int battPin = A0;
 
 //////////DISPLAY END/////////////
 //////////WIFI BEGIN/////////////
@@ -280,11 +282,12 @@ void setup() {
   Serial.println("\nSET UP DISPLAY BEGIN");
 
   pinMode(TFT_CS, OUTPUT);
-  digitalWrite(TFT_CS, HIGH); ////////////////////////////////////needs testing//////////
+  digitalWrite(TFT_CS, HIGH);
 
 
   tft.begin();
-
+  pinMode(battPin, INPUT); /////testing////////
+  
   tft.fillScreen(BLUE);
   tft.setTextWrap(false);
 
@@ -553,14 +556,20 @@ void loop() {
   tft.begin();
   
   TSPoint p = ts.getPoint();
+  int voltReading = analogRead(battPin);
+  int volts = (voltReading/310)*100;
   
   if (menuSelect == 0)
   {
-    tft.fillRect(70, 15, BOXSIZE * 3, 30, BLUE);
-    tft.fillRect(100, 57, BOXSIZE * 2, 30, BLUE);
     if (mo != minute) {
       tft.fillRect(55, 0, BOXSIZE * 2, 25, BLUE);
       mo = minute;
+    }
+    tft.fillRect(70, 15, BOXSIZE * 3, 30, BLUE);
+    tft.fillRect(100, 57, BOXSIZE * 2, 30, BLUE);
+    if (vo != volts) {
+      tft.fillRect(73,80, BOXSIZE * 2, 30, BLUE);
+      vo = volts;
     }
 
     //T:
@@ -576,27 +585,17 @@ void loop() {
       tft.print(":"); tft.print(minute);
     }
     tft.print("\n\nTemp: ");
-    tft.print(Temperature); tft.print(" "); //tft.print((char)248);
+    tft.print(Temperature); tft.print(" ");
     tft.print("F\n\n");
     tft.print("Humidity: ");
     tft.print(Humidity);
     tft.print(" %\n\n");
-    tft.print("Power: ");
-    //insert power code here
+    tft.print("Power: "); tft.print(volts);
     tft.print("%\n");
 
     //prints location
-    tft.print(String(Latitude,3)); tft.print(", "); tft.print(String(Longitude,3));
+    //tft.print(String(Latitude,3)); tft.print(", "); tft.print(String(Longitude,3));
 
-   /* tft.setCursor(30, 260);
-      tft.setTextColor(WHITE, RED);
-      tft.setTextSize(2);
-      tft.println("ERROR: WIFI NOT");
-      tft.setCursor(50, 280);
-      tft.setTextColor(WHITE, RED);
-      tft.setTextSize(2);
-      tft.println("CONNECTED");
-    
      // see if the card is present and can be initialized: /////////////////////needs testing////////////
     if (!SD.begin(chipSelect)) {
     
@@ -608,7 +607,7 @@ void loop() {
       tft.setTextSize(2);
       tft.println("NOT INSERTED");
       while (1);
-    }*/
+    }
   if (status != WL_CONNECTED && Connected || status == WL_CONNECT_FAILED) {
       tft.setCursor(30, 260);
       tft.setTextColor(WHITE, RED);
@@ -624,7 +623,7 @@ void loop() {
   else if (status == WL_CONNECTED && !Connected) {
     Serial.println();
     Serial.println("Connected to wifi");
-    tft.fillRect(30, 260, BOXSIZE * 4, 100, BLUE); ////////need to test/////////////
+    tft.fillRect(30, 260, BOXSIZE * 4, 100, BLUE);
     
     printWifiStatus();
 
@@ -644,7 +643,7 @@ void loop() {
     tft.fillScreen(BLUE);
     tft.setTextWrap(false);
 
-    tft.setCursor(0, 0); //need to move to middle of screen after measuring
+    tft.setCursor(0, 0);
     tft.setTextColor(WHITE);
     tft.setTextSize(2);
     tft.println("To access the Map\n");
@@ -668,12 +667,14 @@ void loop() {
     tft.fillScreen(BLUE);
     tft.setTextWrap(false);
 
-    tft.setCursor(0, 0); //need to move to middle of screen after measuring
+    tft.setCursor(0, 0);
     tft.setTextColor(WHITE);
     tft.setTextSize(2);
     tft.println("To access the\n Cloud Storage\n");
-    tft.println("Use this URL code \nin your web browser: \n");
-    tft.println("[insert URL]"); //need the URL
+    tft.println("To get to Google Sheets \n enter in your web browser: \n");
+    tft.println("docs.google.com/spreadsheets/"); 
+    tft.println("\nLog in using 2.05teamatlas@gmail.com \n");
+    tft.println("then click on Datalog");
 
     //back button
     tft.fillRect(110, 120, BOXSIZE * 2, BOXSIZE, CYAN);

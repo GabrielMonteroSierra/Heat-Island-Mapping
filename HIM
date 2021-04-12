@@ -63,6 +63,10 @@
 
 #define chipSelect A1
 
+bool sdInserted = false;
+
+File dataFile;
+
 //////////SD END/////////////
 //////////DHT BEGIN////////////
 
@@ -163,6 +167,8 @@ int mo;
 int vo;
 int battPin = A0;
 
+bool displayWiFiConnected = false;
+
 //////////DISPLAY END/////////////
 //////////WIFI BEGIN/////////////
 
@@ -189,7 +195,7 @@ float Latitude = 0.0;
 
 void setup() {
   Serial.begin(115200);
-  while(!Serial);
+  //while(!Serial);
 
   if (!ECCX08.begin()) {
     Serial.println("No ECCX08 present!");
@@ -208,35 +214,40 @@ void setup() {
   // see if the card is present and can be initialized:
   if (!SD.begin(chipSelect)) {
     Serial.println("Card failed, or not present");
-    while (1);
+    sdInserted = false;
   }
-  Serial.println("card initialized.");
+  else {
+    Serial.println("card initialized.");
+    sdInserted = true;
 
-  File dataFile;
-  String labels = "";
-  if (SD.exists("datalog.csv")) {
-    Serial.println("Test opening datalog.csv ...");
-    dataFile = SD.open("datalog.csv", FILE_WRITE);
-    dataFile.close();
-  } else {
-    Serial.println("Creating file ...");
-    dataFile = SD.open("datalog.csv", FILE_WRITE);
+    String labels = "";
+    if(SD.exists("datalog.csv")) {
+      Serial.println("Test opening datalog.csv ...");
+      dataFile = SD.open("datalog.csv", FILE_WRITE);
+      dataFile.close();
+    } else {
+      Serial.println("Creating file ...");
+      dataFile = SD.open("datalog.csv", FILE_WRITE);
 
-    labels += "Date";
-    labels += ",";
-    labels += "Time";
-    labels += ",";
-    labels += "Temperature";
-    labels += ",";
-    labels += "Humidity";
-    labels += ",";
-    labels += "Longitude";
-    labels += ",";
-    labels += "Latitude";
+      labels += "Date";
+      labels += ",";
+      labels += "Time";
+      labels += ",";
+      labels += "Temperature";
+      labels += ",";
+      labels += "Humidity";
+      labels += ",";
+      labels += "Longitude";
+      labels += ",";
+      labels += "Latitude";
 
-    dataFile.println(labels);
-    dataFile.close();
+      dataFile.println(labels);
+      dataFile.close();
+    }
   }
+
+  //File dataFile;
+  
   digitalWrite(chipSelect, HIGH);
   Serial.println("\nSET UP SD END");
   ///////////////////////////////////////// SET UP SD END ////////////////////////////////////////////////////////////////////////////////////
@@ -372,6 +383,7 @@ void setup() {
 
 void loop() {
   int delayTimer = 60000;
+
   /////////////////////////////////////////  LOOP GPS BEGIN ////////////////////////////////////////////////////////////////////////////////////
   Serial.println("\nLOOP GPS BEGIN");
   
@@ -494,16 +506,16 @@ void loop() {
 
     Serial.println("\n==========================================================================================================");
     // ISO Standard Date Format, with leading zeros https://xkcd.com/1179/
-    Serial.print("\nDate: " + Date);
+    Serial.print("Date: " + Date);
 
     Serial.print("   Time: " + Time);
-    Serial.print("Fix: "); Serial.print((int)GPS.fix);
+    Serial.print(" Fix: "); Serial.print((int)GPS.fix);
     Serial.print(" quality: "); Serial.println((int)GPS.fixquality);
     if (GPS.fix) {
       Serial.print("Location: ");
-      Serial.print(GPS.latitude, 7); Serial.print(GPS.lat);
+      Serial.print(Latitude, 7); Serial.print(GPS.lat);
       Serial.print(", ");
-      Serial.print(GPS.longitude, 7); Serial.println(GPS.lon);
+      Serial.print(Longitude, 7); Serial.println(GPS.lon);
       Serial.print("Satellites: "); Serial.println((int)GPS.satellites);
     }
     
@@ -550,6 +562,8 @@ void loop() {
   Serial.println("\nLOOP DISPLAY BEGIN");
   pinMode(TFT_CS, OUTPUT);
   SPI.setDataMode(SPI_MODE3);
+
+  //tft.begin();
   
   digitalWrite(TFT_CS, HIGH);
 
@@ -557,10 +571,10 @@ void loop() {
   
   TSPoint p = ts.getPoint();
   int voltReading = analogRead(battPin);
-  int volts = (voltReading/310)*100;
-  
+  int volts = map(voltReading, 0, 1023, 0, 100);
+  /*
   if (menuSelect == 0)
-  {
+  {/*
     if (mo != minute) {
       tft.fillRect(55, 0, BOXSIZE * 2, 25, BLUE);
       mo = minute;
@@ -570,8 +584,10 @@ void loop() {
     if (vo != volts) {
       tft.fillRect(73,80, BOXSIZE * 2, 30, BLUE);
       vo = volts;
-    }
-
+    }*//*
+    tft.setCursor(0, 0);
+    tft.fillScreen(BLUE);
+    tft.setTextWrap(false);
     //T:
     //H:
     tft.setCursor(85, 0);
@@ -593,50 +609,59 @@ void loop() {
     tft.print("Power: "); tft.print(volts);
     tft.print("%\n");
 
+    //drawing menu options
+    tft.fillRect(10, 140, BOXSIZE * 2, BOXSIZE, CYAN); //draws rectangle (x,y,width,height,color)
+    tft.setCursor(20, 150);
+    tft.setTextColor(WHITE, CYAN);
+    tft.setTextSize(2);
+    tft.println("Mapping");
+
+    tft.fillRect(10, 200, BOXSIZE * 2, BOXSIZE, CYAN); //draws rectangle (x,y,width,height,color)
+    tft.setCursor(20, 210);
+    tft.setTextColor(WHITE, CYAN);
+    tft.setTextSize(2);
+    tft.println("Cloud");
+    tft.setCursor(20, 227);
+    tft.setTextColor(WHITE, CYAN);
+    tft.setTextSize(2);
+    tft.println("Storage");
+
     //prints location
     //tft.print(String(Latitude,3)); tft.print(", "); tft.print(String(Longitude,3));
 
      // see if the card is present and can be initialized: /////////////////////needs testing////////////
-    if (!SD.begin(chipSelect)) {
-    
+    if (!sdInserted) {
+      tft.setCursor(125, 150);
       tft.setTextColor(WHITE, RED);
       tft.setTextSize(2);
-      tft.println("ERROR: SD CARD");
-      tft.setCursor(50, 280);
+      tft.println("ERROR: SD");
+      tft.setCursor(150, 170);
       tft.setTextColor(WHITE, RED);
       tft.setTextSize(2);
-      tft.println("NOT INSERTED");
-      while (1);
+      tft.println("CARD");
     }
-  if (status != WL_CONNECTED && Connected || status == WL_CONNECT_FAILED) {
-      tft.setCursor(30, 260);
+
+    status = WiFi.status();
+
+  if (status != WL_CONNECTED) {
+      tft.setCursor(50, 260);
       tft.setTextColor(WHITE, RED);
       tft.setTextSize(2);
-      tft.println("ERROR: WIFI NOT");
-      tft.setCursor(50, 280);
+      tft.println("ERROR: WIFI");
+      tft.setCursor(40, 280);
       tft.setTextColor(WHITE, RED);
       tft.setTextSize(2);
-      tft.println("CONNECTED");
-    Connected = false;
+      tft.println("NOT CONNECTED");
+
     WiFi.begin(MY_SSID, MY_PWD);
   }
-  else if (status == WL_CONNECTED && !Connected) {
-    Serial.println();
-    Serial.println("Connected to wifi");
-    tft.fillRect(30, 260, BOXSIZE * 4, 100, BLUE);
-    
-    printWifiStatus();
-
-    Connected = true;
-  }
-  
   }
 
   // we have some minimum pressure we consider 'valid'
   // pressure of 0 means no pressing!
   //logic for pushing Mapping button
   if (p.z > ts.pressureThreshhold && p.x < 550 && p.x > 370 && p.y < 600 && p.y > 500 && menuSelect == 0) {
-
+*/
     menuSelect = 1; //shows we are in one of the URL menus
 
     tft.setCursor(0, 0);
@@ -651,10 +676,10 @@ void loop() {
     tft.println("[insert URL]"); //need the URL
 
     //back button
-    tft.fillRect(110, 120, BOXSIZE * 2, BOXSIZE, CYAN);
-    tft.setCursor(130, 135); //should be lower right
+    tft.fillRect(110, 240, BOXSIZE * 2, BOXSIZE, CYAN);
+    tft.setCursor(130, 255); //should be lower right
     tft.setTextColor(WHITE, CYAN);
-    tft.println("Back");
+    tft.println("Back");/*
   }
 
 
@@ -670,23 +695,23 @@ void loop() {
     tft.setCursor(0, 0);
     tft.setTextColor(WHITE);
     tft.setTextSize(2);
-    tft.println("To access the\n Cloud Storage\n");
-    tft.println("To get to Google Sheets \n enter in your web browser: \n");
-    tft.println("docs.google.com/spreadsheets/"); 
-    tft.println("\nLog in using 2.05teamatlas@gmail.com \n");
-    tft.println("then click on Datalog");
+    tft.println("Cloud Storage Access\n");
+    tft.println("Go to Google Sheets \nusing: \n");
+    tft.println("docs.google.com/\nspreadsheets/"); 
+    tft.println("\nLog in using a gmail\n account. \n");
+    tft.println("Click on Datalog");
 
     //back button
-    tft.fillRect(110, 120, BOXSIZE * 2, BOXSIZE, CYAN);
-    tft.setCursor(130, 135); //should be lower right
+    tft.fillRect(110, 240, BOXSIZE * 2, BOXSIZE, CYAN);
+    tft.setCursor(130, 255); //should be lower right
     tft.setTextColor(WHITE, CYAN);
     tft.println("Back");
   }
 
   //logic for pushing the back button
-  if (p.z > ts.pressureThreshhold && p.x < 720 && p.x > 580 && p.y < 580 && p.y > 480 && menuSelect == 1)
+  if (p.z > ts.pressureThreshhold && p.x < 720 && p.x > 580 && p.y < 700 && p.y > 600 && menuSelect == 1)
   {
-
+    
     menuSelect = 0;
     tft.setCursor(0, 0);
     tft.fillScreen(BLUE);
@@ -726,7 +751,7 @@ void loop() {
     tft.setTextSize(2);
     tft.println("Storage");
   }
-
+*/
   Serial.println("\nLOOP DISPLAY END");
   digitalWrite(TFT_CS, LOW);
 
@@ -739,40 +764,125 @@ void loop() {
 
   digitalWrite(chipSelect, LOW);
 
-  SD.begin();
-  
-  // make a string for assembling the data to log:
   String dataString = "";
 
-  dataString += String(Date);
-  dataString += ",";
-  dataString += String(Time);
-  dataString += ",";
-  dataString += String(Temperature,1);
-  dataString += ",";
-  dataString += String(Humidity,1);
-  dataString += ",";
-  dataString += String(Longitude, 7); //Saves the longitdue value
-  dataString += ",";
-  dataString += String(Latitude, 7);
+  //SD.begin();
+  if (!SD.begin(chipSelect)) {                                                        //SD.begin fails, card not inserted
+    Serial.println("Card failed, or not present");
+    sdInserted = false;
+    delay(30000);
+    return;
+  } else {    //SD.begin works, card inserted
+    if(sdInserted == false) {                                                       //means in a previous iteration the card was not inserted but it is now
+      sdInserted = true;
+
+      if(SD.exists("datalog.csv")) {                                                       //checking for file
+        // make a string for assembling the data to log:
+        dataString = "";
+
+        dataString += String(Date);
+        dataString += ",";
+        dataString += String(Time);
+        dataString += ",";
+        dataString += String(Temperature,1);
+        dataString += ",";
+        dataString += String(Humidity,1);
+        dataString += ",";
+        dataString += String(Longitude, 7); //Saves the longitdue value
+        dataString += ",";
+        dataString += String(Latitude, 7);
+  
+        // open the file. note that only one file can be open at a time,
+        // so you have to close this one before opening another.
+
+        dataFile = SD.open("datalog.csv", FILE_WRITE);
+
+        // if the file is available, write to it:
+        if (dataFile) {
+          dataFile.println(dataString);
+          dataFile.close();
+          // print to the serial port too:
+        }
+        // if the file isn't open, pop up an error:
+        else {
+          Serial.println("error opening datalog.csv in sd loop in if(SD.exists())");
+        }
+
+        dataFile.close();
+      } else {                                                                      //if file doesnt exists, create it
+        Serial.println("Creating file ...");
+        dataFile = SD.open("datalog.csv", FILE_WRITE);
+        
+        String labels = "";
+        
+        labels += "Date";
+        labels += ",";
+        labels += "Time";
+        labels += ",";
+        labels += "Temperature";
+        labels += ",";
+        labels += "Humidity";
+        labels += ",";
+        labels += "Longitude";
+        labels += ",";
+        labels += "Latitude";
+
+        dataFile.println(labels);
+
+        dataString = "";
+
+        dataString += String(Date);
+        dataString += ",";
+        dataString += String(Time);
+        dataString += ",";
+        dataString += String(Temperature,1);
+        dataString += ",";
+        dataString += String(Humidity,1);
+        dataString += ",";
+        dataString += String(Longitude, 7); //Saves the longitdue value
+        dataString += ",";
+        dataString += String(Latitude, 7);
+
+        dataFile.println(dataString);
+
+        dataFile.close();
+      }
+    }
+    else {                                                                                 //sdInserter == true, means in a previous iteration the card was inserted
+      // make a string for assembling the data to log:                                     //write to sd like normal
+      dataString = "";
+
+      dataString += String(Date);
+      dataString += ",";
+      dataString += String(Time);
+      dataString += ",";
+      dataString += String(Temperature,1);
+      dataString += ",";
+      dataString += String(Humidity,1);
+      dataString += ",";
+      dataString += String(Longitude, 7); //Saves the longitdue value
+      dataString += ",";
+      dataString += String(Latitude, 7);
   
 
-  // open the file. note that only one file can be open at a time,
-  // so you have to close this one before opening another.
+      // open the file. note that only one file can be open at a time,
+      // so you have to close this one before opening another.
 
-  File dataFile = SD.open("datalog.csv", FILE_WRITE);
+      dataFile = SD.open("datalog.csv", FILE_WRITE);
 
-  // if the file is available, write to it:
-  if (dataFile) {
-    dataFile.println(dataString);
-    dataFile.close();
-    // print to the serial port too:
+      // if the file is available, write to it:
+      if (dataFile) {
+        dataFile.println(dataString);
+        dataFile.close();
+        // print to the serial port too:
+      }
+      // if the file isn't open, pop up an error:
+      else {
+        Serial.println("error opening datalog.csv in sd loop in sdInserter == true");
+      }
+    }
   }
-  // if the file isn't open, pop up an error:
-  else {
-    Serial.println("error opening datalog.csv in sd loop");
-  }
-
+  
   digitalWrite(chipSelect, HIGH); /////////////////////////needs testing/////////////
 
   SD.end();
@@ -911,13 +1021,15 @@ void loop() {
 */
   Serial.println("\nLOOP WIFI END");
   ///////////////////////////////////////// LOOP WIFI END ////////////////////////////////////////////////////////////////////////////////////
-  
+  /*
   if(delayTimer > 0) {
     delay(delayTimer);
   }
   else {
     return;
   }
+  */
+  delay(30000);
 } //End of Loop ****************************************************************************************************
 
 

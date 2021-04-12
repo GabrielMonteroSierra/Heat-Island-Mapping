@@ -671,9 +671,12 @@ void loop() {
     tft.setCursor(0, 0);
     tft.setTextColor(WHITE);
     tft.setTextSize(2);
-    tft.println("To access the Map\n");
-    tft.println("Use this URL code \nin your web browser: \n");
-    tft.println("[insert URL]"); //need the URL
+    tft.println("Map Access\n");
+    tft.println("Click on link \nprovided by GitHub \n");
+    tft.println("during the setup.\n"); 
+    tft.println("\nCan be found\nunder GitHub pages\n");
+    tft.println("in settings on\n");
+    tft.println("GitHub.com\n");
 
     //back button
     tft.fillRect(110, 240, BOXSIZE * 2, BOXSIZE, CYAN);
